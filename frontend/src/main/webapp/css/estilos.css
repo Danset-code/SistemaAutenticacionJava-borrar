@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+body { margin:0; font-family:Arial,sans-serif; background:#f2f4f7; color:#222; }
+.contenedor { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+.tarjeta { width:100%; max-width:420px; background:white; padding:32px; border-radius:12px; box-shadow:0 5px 20px rgba(0,0,0,.12); }
+label { display:block; margin-top:16px; margin-bottom:6px; font-weight:bold; }
+input { width:100%; padding:12px; border:1px solid #ccc; border-radius:6px; font-size:16px; }
+button { width:100%; margin-top:22px; padding:12px; border:0; border-radius:6px; cursor:pointer; font-size:16px; background:#222; color:white; }
+#mensaje { margin-top:18px; padding:10px; border-radius:6px; }
+.exito { background:#e7f6e7; color:#176b17; }
+.error { background:#fde8e8; color:#a11; }
+.enlace { margin-top:20px; text-align:center; }
