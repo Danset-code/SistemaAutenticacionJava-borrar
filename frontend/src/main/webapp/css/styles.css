@@ -1,0 +1,119 @@
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f2f3f5;
+    color: #161616;
+}
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+    width: 286px;
+    background: #058b2c;
+    color: white;
+    position: fixed;
+    top: 0; bottom: 0; left: 0;
+}
+.brand {
+    height: 78px;
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    font-size: 28px;
+    font-weight: 700;
+    background: #087f2a;
+}
+.nav button {
+    width: 100%;
+    padding: 20px 24px;
+    background: transparent;
+    color: white;
+    border: 0;
+    border-bottom: 1px solid rgba(255,255,255,.22);
+    text-align: left;
+    font-size: 18px;
+}
+.nav button.active { background: #0ab83a; }
+.main { margin-left: 286px; width: calc(100% - 286px); padding: 28px 24px; }
+.topbar { display:flex; justify-content:space-between; align-items:center; gap:15px; }
+h1 { margin: 0 0 28px; font-size: 31px; }
+h2 { margin: 0 0 18px; }
+.btn {
+    border: 0;
+    border-radius: 9px;
+    padding: 13px 20px;
+    font-weight: 600;
+}
+.btn-primary { background:#08b737; color:white; }
+.btn-danger { background:#ef3d43; color:white; padding:9px 15px; }
+.btn-secondary { background:#e4e7eb; color:#222; }
+.cards { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; margin-bottom:32px; }
+.card {
+    background:white;
+    border-radius:14px;
+    padding:23px;
+    box-shadow:0 3px 10px rgba(0,0,0,.08);
+}
+.metric-label { color:#667085; font-size:21px; font-weight:600; }
+.metric-value { color:#06b737; font-size:37px; font-weight:700; margin-top:17px; }
+.grid-charts { display:grid; grid-template-columns:repeat(2,1fr); gap:22px; }
+.chart-card { min-height:370px; }
+.chart-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.chart-title { font-size:20px; font-weight:700; }
+.chart-wrap { height:280px; background:#f1f2f4; border-radius:10px; padding:10px; }
+canvas { width:100%; height:100%; }
+.toolbar { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px; }
+.input, select {
+    border:1px solid #cbd1d8;
+    background:white;
+    border-radius:8px;
+    padding:11px 13px;
+    min-width:190px;
+}
+.table-card { padding:0; overflow:hidden; }
+table { width:100%; border-collapse:collapse; background:white; }
+th { background:#07b936; color:white; text-align:left; padding:16px; }
+td { padding:16px; border-bottom:1px solid #e4e7eb; }
+.status { font-weight:600; }
+.status.active { color:#079c32; }
+.status.inactive { color:#d03a3a; }
+.empty { padding:30px; text-align:center; color:#667085; }
+.modal-backdrop {
+    position:fixed; inset:0; background:rgba(0,0,0,.45);
+    display:flex; align-items:center; justify-content:center; z-index:20;
+}
+.modal {
+    width:min(520px, 92vw); background:white; border-radius:15px; padding:24px;
+}
+.form-row { display:flex; flex-direction:column; gap:7px; margin-bottom:14px; }
+.form-row label { font-weight:600; }
+.alert { padding:12px; border-radius:8px; margin-bottom:15px; }
+.alert.error { background:#ffe5e5; color:#a00; }
+.alert.success { background:#e4faea; color:#08752a; }
+.login-page {
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:#eef1f3;
+}
+.login-box { width:min(430px,92vw); background:white; padding:32px; border-radius:18px; box-shadow:0 5px 20px rgba(0,0,0,.1); }
+.login-box h1 { color:#078c2e; font-size:29px; margin-bottom:8px; }
+.muted { color:#667085; }
+.login-tabs { display:flex; margin:22px 0; }
+.login-tabs button { flex:1; border:0; padding:12px; background:#e9ecef; }
+.login-tabs button.active { background:#08b737; color:white; }
+.form-control { width:100%; border:1px solid #cbd1d8; padding:12px; border-radius:8px; }
+.full { width:100%; }
+.ws-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#d33; margin-right:6px; }
+.ws-dot.ok { background:#08b737; }
+@media(max-width:900px) {
+    .sidebar { width:210px; }
+    .main { margin-left:210px; width:calc(100% - 210px); }
+    .cards { grid-template-columns:1fr; }
+    .grid-charts { grid-template-columns:1fr; }
+}
+@media(max-width:650px) {
+    .sidebar { position:static; width:100%; min-height:auto; }
+    .layout { display:block; }
+    .main { margin-left:0; width:100%; padding:20px; }
+    .brand { height:60px; }
+}

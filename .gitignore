@@ -1,10 +1,23 @@
+# Java/Maven
 **/target/
 *.class
 *.log
+
+# NetBeans
+**/nbproject/private/
+**/nbbuild/
+**/dist/
+**/.nb-gradle/
+.nb-gradle/
+
+# IDE
 .idea/
 .vscode/
-nbproject/private/
+
+# OS
 .DS_Store
 Thumbs.db
-.git
-/docs
+
+# Local configuration
+.env
+application-local.properties

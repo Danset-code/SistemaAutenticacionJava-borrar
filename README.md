@@ -1,41 +1,179 @@
-# SistemaAutenticacionJava
+# Sistema de Monitoreo de Cultivo Medicinal
 
-Proyecto académico con dos aplicaciones independientes:
+Proyecto formativo para visualización de datos ambientales de un cultivo medicinal.
 
-- frontend: Maven Web Application (WAR), HTML/CSS/JavaScript.
-- backend: Spring Boot REST API.
-- database: script MySQL.
+## Arquitectura
 
-## Ejecución
+- **Backend:** Java 21 + Spring Boot 3.5 + Spring Data JPA + MySQL.
+- **Frontend:** Maven Web Application (WAR) con HTML5, CSS y JavaScript, desplegable en Apache Tomcat desde NetBeans.
+- **Comunicación en tiempo real:** WebSocket nativo en `/ws/sensores`.
+- **API REST:** endpoints `/api/...`.
+- **Datos ficticios:** el backend crea sensores, gráficos y lecturas iniciales y genera nuevas lecturas automáticamente cada 5 segundos.
 
-1. Ejecutar `database/database.sql` en MySQL.
-2. Configurar la contraseña de MySQL en `backend/src/main/resources/application.properties`.
-3. Abrir `backend` en NetBeans y ejecutar `Main.java`.
-4. Abrir `frontend` en NetBeans como proyecto Maven Web Application.
-5. Configurar Apache Tomcat para el frontend.
-6. Ejecutar el frontend.
-7. Consumir el backend desde el frontend mediante HTTP y JSON.
+## Puertos recomendados
 
-Backend:
-http://localhost:8080
+Para evitar el conflicto que ocurre cuando Tomcat y Spring Boot intentan utilizar 8080:
 
-Frontend:
-http://localhost:8081/sistema-autenticacion-frontend/
+- Backend Spring Boot: `http://localhost:8080`
+- Frontend Tomcat: `http://localhost:8081/monitoreo/`
 
-## Endpoints
+En NetBeans configura Tomcat para utilizar el puerto HTTP `8081`.
 
-POST /api/auth/register
-POST /api/auth/login
+## Base de datos
+
+Crear en MySQL:
+
+```sql
+CREATE DATABASE monitoreo_cultivo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Luego modificar `backend/src/main/resources/application.properties`:
+
+```properties
+spring.datasource.username=root
+spring.datasource.password=TU_PASSWORD
+```
+
+El backend crea las tablas automáticamente con JPA.
+
+## Ejecutar backend
+
+Desde NetBeans:
+1. Abrir la carpeta `backend` como proyecto Maven.
+2. Ejecutar `Main.java` o `spring-boot:run`.
+3. Verificar que Spring Boot escuche en `http://localhost:8080`.
+
+## Ejecutar frontend
+
+Desde NetBeans:
+1. Abrir `frontend` como proyecto Maven Web Application.
+2. Registrar/configurar Apache Tomcat.
+3. Usar el puerto `8081`.
+4. Ejecutar el proyecto.
+5. Abrir `http://localhost:8081/monitoreo/`.
+
+## Usuario de prueba
+
+El inicializador crea:
+
+- Correo: `admin@monitoreo.com`
+- Contraseña: `Admin123`
+
+También se puede registrar un usuario desde la pantalla de acceso.
+
+## Funcionalidades
+
+### Dashboard
+- Tarjetas con temperatura, humedad y CO₂.
+- Gráficos configurables.
+- Crear gráficos.
+- Eliminar gráficos.
+- Actualización de lecturas en tiempo real mediante WebSocket.
+
+### Sensores
+- Lista de sensores.
+- Estado.
+- Última lectura.
+- Valor actual.
+- CRUD básico de sensores desde API REST.
+
+### Reportes
+- Consulta de lecturas.
+- Filtro por texto.
+- Filtro por sensor.
+- Exportación de los resultados a CSV compatible con Excel.
+
+## Endpoints principales
+
+### Autenticación
+
+`POST /api/auth/register`
+
+```json
+{
+  "nombre": "Daniel",
+  "correo": "daniel@example.com",
+  "password": "123456"
+}
+```
+
+`POST /api/auth/login`
+
+```json
+{
+  "correo": "admin@monitoreo.com",
+  "password": "Admin123"
+}
+```
+
+### Sensores
+
+- `GET /api/sensores`
+- `GET /api/sensores/{id}`
+- `POST /api/sensores`
+- `PUT /api/sensores/{id}`
+- `PATCH /api/sensores/{id}/estado`
+- `DELETE /api/sensores/{id}`
+
+### Gráficos
+
+- `GET /api/graficos`
+- `GET /api/graficos/{id}`
+- `POST /api/graficos`
+- `PUT /api/graficos/{id}`
+- `PATCH /api/graficos/{id}/activo`
+- `DELETE /api/graficos/{id}`
+
+### Lecturas
+
+- `GET /api/lecturas`
+- `GET /api/lecturas/{id}`
+- `GET /api/lecturas/sensor/{sensorId}`
+- `POST /api/lecturas`
+- `DELETE /api/lecturas/{id}`
+
+### Reportes
+
+`GET /api/reportes`
+
+Parámetros opcionales:
+
+- `sensorId`
+- `desde` en formato `yyyy-MM-dd`
+- `hasta` en formato `yyyy-MM-dd`
+
+## WebSocket
+
+El frontend se conecta a:
+
+`ws://localhost:8080/ws/sensores`
+
+Cada actualización tiene una estructura similar a:
+
+```json
+{
+  "tipo": "lectura",
+  "sensorId": 1,
+  "sensor": "Temperatura",
+  "valor": 26.4,
+  "unidad": "°C",
+  "fecha": "2026-07-28T13:00:00"
+}
+```
 
 ## Git
 
-git init
+Ejemplo de commits:
+
+```bash
 git add .
-git commit -m "Inicializar proyecto"
-git add .
-git commit -m "Agregar backend Spring Boot"
-git add .
-git commit -m "Agregar frontend web Maven"
-git branch -M main
-git remote add origin URL_DEL_REPOSITORIO
-git push -u origin main
+git commit -m "Agregar API REST de sensores y lecturas"
+git commit -m "Implementar CRUD de graficos"
+git commit -m "Agregar dashboard web y actualizacion por WebSocket"
+git commit -m "Agregar reportes y documentacion de endpoints"
+git push
+```
+
+## Nota de seguridad
+
+Las credenciales de MySQL son locales. No subir contraseñas reales al repositorio público.
