@@ -180,20 +180,3 @@ Cada actualización tiene una estructura similar a:
   "fecha": "2026-07-28T13:00:00"
 }
 ```
-
-## Git
-
-Ejemplo de commits:
-
-```bash
-git add .
-git commit -m "Agregar API REST de sensores y lecturas"
-git commit -m "Implementar CRUD de graficos"
-git commit -m "Agregar dashboard web y actualizacion por WebSocket"
-git commit -m "Agregar reportes y documentacion de endpoints"
-git push
-```
-
-## Nota de seguridad
-
-Las credenciales de MySQL son locales. No subir contraseñas reales al repositorio público.
