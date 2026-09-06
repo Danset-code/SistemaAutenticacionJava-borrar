@@ -15,6 +15,9 @@ public interface LecturaRepository extends JpaRepository<Lectura, Long> {
     List<Lectura> findAllByOrderByFechaDesc();
 
     List<Lectura> findBySensorIdOrderByFechaDesc(Long sensorId);
+    
+    // Elimina todas las lecturas asociadas a un sensor 
+    void deleteBySensorId(Long sensorId);
 
 
     // ==============================

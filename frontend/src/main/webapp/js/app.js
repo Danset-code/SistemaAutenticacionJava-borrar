@@ -1,12 +1,48 @@
 const API = "http://localhost:8080/api";
 const WS_URL = "ws://localhost:8080/ws/sensores";
 
+const SENSOR_CATALOG = [
+    // Ambiente
+    { id: "temperatura-aire", nombre: "Temperatura del aire", unidad: "°C" },
+    { id: "humedad-aire", nombre: "Humedad relativa", unidad: "%RH" },
+    { id: "co2", nombre: "CO₂", unidad: "ppm" },
+    { id: "presion-atmosferica", nombre: "Presión atmosférica", unidad: "hPa" },
+
+    // Luz y radiación
+    { id: "par", nombre: "Radiación PAR", unidad: "µmol/m²/s" },
+    { id: "radiacion-solar", nombre: "Radiación solar", unidad: "W/m²" },
+    { id: "uv", nombre: "Índice UV", unidad: "UV Index" },
+
+    // Planta / superficie foliar
+    { id: "temperatura-hoja", nombre: "Temperatura de hoja", unidad: "°C" },
+    { id: "humedad-foliar", nombre: "Humedad foliar", unidad: "%" },
+
+    // Sustrato / suelo
+    { id: "humedad-sustrato", nombre: "Humedad del sustrato", unidad: "%VWC" },
+    { id: "temperatura-sustrato", nombre: "Temperatura del sustrato", unidad: "°C" },
+    { id: "ph-sustrato", nombre: "pH del sustrato", unidad: "pH" },
+    { id: "ec-sustrato", nombre: "Conductividad eléctrica del sustrato", unidad: "mS/cm" },
+
+    // Agua / fertirriego
+    { id: "temperatura-agua", nombre: "Temperatura del agua", unidad: "°C" },
+    { id: "ph-agua", nombre: "pH del agua", unidad: "pH" },
+    { id: "ec-agua", nombre: "Conductividad eléctrica del agua", unidad: "mS/cm" },
+    { id: "oxigeno-disuelto", nombre: "Oxígeno disuelto", unidad: "mg/L" },
+    { id: "orp", nombre: "Potencial ORP", unidad: "mV" },
+    { id: "salinidad", nombre: "Salinidad", unidad: "ppt" },
+    { id: "nivel-agua", nombre: "Nivel de agua", unidad: "%" },
+    { id: "caudal", nombre: "Caudal de riego", unidad: "L/min" },
+    { id: "presion-riego", nombre: "Presión de riego", unidad: "bar" },
+    { id: "nitratos", nombre: "Nitratos (NO₃⁻)", unidad: "mg/L" },
+];
+
 const state = {
     page: "dashboard",
     user: JSON.parse(localStorage.getItem("monitoreo_user") || "null"),
     sensors: [],
     charts: [],
     readings: [],
+    reportData: [],
     ws: null,
     wsConnected: false,
     chartHistory: {}
@@ -79,6 +115,56 @@ function renderLogin() {
     showLoginTab("login");
 }
 
+function showForgotPassword() {
+    const form = document.getElementById("auth-form");
+
+    form.innerHTML = `
+        <div id="auth-message"></div>
+
+        <form onsubmit="forgotPassword(event)">
+            <div class="form-row">
+                <label>Correo</label>
+                <input
+                    id="forgotCorreo"
+                    class="form-control"
+                    type="email"
+                    required
+                >
+            </div>
+
+            <button class="btn btn-primary full">
+                Recuperar contraseña
+            </button>
+        </form>
+
+        <p style="margin-top:15px">
+            <a href="#" onclick="showLoginTab('login'); return false;">
+                Volver al inicio de sesión
+            </a>
+        </p>
+    `;
+}
+
+async function forgotPassword(event) {
+    event.preventDefault();
+
+    const correo = document.getElementById("forgotCorreo").value;
+
+    try {
+        const result = await api("/auth/forgot-password", {
+            method: "POST",
+            body: JSON.stringify({ correo })
+        });
+
+        document.getElementById("auth-message").innerHTML =
+            `<div class="success">${escapeHtml(result.message)}</div>`;
+
+    } catch (e) {
+        document.getElementById("auth-message").innerHTML =
+            `<div class="error">${escapeHtml(e.message)}</div>`;
+    }
+}
+
 function showLoginTab(mode) {
     document.getElementById("tabLogin").classList.toggle("active", mode === "login");
     document.getElementById("tabRegister").classList.toggle("active", mode === "register");
@@ -86,13 +172,44 @@ function showLoginTab(mode) {
 
     if (mode === "login") {
         form.innerHTML = `
-        <div id="auth-message"></div>
-        <form onsubmit="login(event)">
-          <div class="form-row"><label>Correo</label><input id="loginCorreo" class="form-control" type="email" required></div>
-          <div class="form-row"><label>Contraseña</label><input id="loginPassword" class="form-control" type="password" required></div>
-          <button class="btn btn-primary full">Iniciar sesión</button>
-        </form>
-        <p class="muted" style="margin-top:18px">Prueba: admin@monitoreo.com / Admin123</p>`;
+            <div id="auth-message"></div>
+
+            <form onsubmit="login(event)">
+                <div class="form-row">
+                    <label>Correo</label>
+                    <input
+                        id="loginCorreo"
+                        class="form-control"
+                        type="email"
+                        required
+                    >
+                </div>
+
+                <div class="form-row">
+                    <label>Contraseña</label>
+                    <input
+                        id="loginPassword"
+                        class="form-control"
+                        type="password"
+                        required
+                    >
+                </div>
+
+                <button class="btn btn-primary full">
+                    Iniciar sesión
+                </button>
+            </form>
+
+            <p style="margin-top:15px">
+                <a href="#" onclick="showForgotPassword(); return false;">
+                    ¿Olvidaste tu contraseña?
+                </a>
+            </p>
+
+            <p class="muted" style="margin-top:18px">
+                Prueba: admin@monitoreo.com / Admin123
+            </p>
+        `;
     } else {
         form.innerHTML = `
         <div id="auth-message"></div>
@@ -180,26 +297,22 @@ function seedHistory() {
     });
 }
 
+function normalizeSensorType(type) {
+    return String(type || "").trim().toLowerCase().replaceAll("co₂", "co2");
+}
+
 function metricFor(type) {
-    const sensor = state.sensors.find(s => s.tipo.toLowerCase() === type.toLowerCase());
+    const sensor = state.sensors.find(s => normalizeSensorType(s.tipo) === normalizeSensorType(type));
     return sensor || { valorActual: 0, unidad: "" };
 }
 
 function renderDashboard() {
     const main = document.getElementById("main-content");
-    const t = metricFor("Temperatura");
-    const h = metricFor("Humedad");
-    const c = metricFor("CO₂");
 
     main.innerHTML = `
       <div class="topbar">
         <h1>Sistema de Monitoreo de Cultivo Medicinal</h1>
         <button class="btn btn-primary" onclick="openChartModal()">Crear gráfico</button>
-      </div>
-      <div class="cards">
-        <div class="card"><div class="metric-label">Temperatura</div><div class="metric-value" id="metric-temp">${formatValue(t)} ${escapeHtml(t.unidad)}</div></div>
-        <div class="card"><div class="metric-label">Humedad</div><div class="metric-value" id="metric-hum">${formatValue(h)} ${escapeHtml(h.unidad)}</div></div>
-        <div class="card"><div class="metric-label">CO₂</div><div class="metric-value" id="metric-co2">${formatValue(c)} ${escapeHtml(c.unidad)}</div></div>
       </div>
       <div class="grid-charts" id="charts-container"></div>
       <div id="modal-container"></div>
@@ -208,7 +321,10 @@ function renderDashboard() {
 }
 
 function formatValue(s) {
-    return Number(s.valorActual || 0).toFixed(s.tipo && s.tipo.toLowerCase() === "co₂" ? 0 : 1);
+    const value = Number(s?.valorActual || 0);
+    const type = findSensorDefinition(s?.tipo);
+    const decimals = type && ["CO₂", "Nitratos (NO₃⁻)"].includes(type.nombre) ? 0 : 1;
+    return value.toFixed(decimals);
 }
 
 function renderCharts() {
@@ -293,16 +409,48 @@ function drawChart(g) {
     ctx.fillText(`${g.sensor.tipo}: ${Number(g.sensor.valorActual).toFixed(1)} ${g.sensor.unidad}`, 55, h-7);
 }
 
+function findSensorDefinition(typeOrName) {
+    const normalized = normalizeSensorType(typeOrName);
+    return SENSOR_CATALOG.find(item =>
+        normalizeSensorType(item.nombre) === normalized || item.id === normalized
+    ) || null;
+}
+
+function buildChartSensorOptions() {
+    const options = [];
+
+    // Primero mostramos los sensores que ya existen en el sistema.
+    state.sensors.forEach(s => {
+        options.push(
+            `<option value="sensor:${s.id}">${escapeHtml(s.nombre)} — ${escapeHtml(s.tipo)} (${escapeHtml(s.unidad)})</option>`
+        );
+    });
+
+    // Después mostramos TODO el catálogo base para poder crear sensores nuevos
+    // sin depender de los sensores que ya existan en la base de datos.
+    SENSOR_CATALOG.forEach(t => {
+        options.push(
+            `<option value="tipo:${escapeHtml(t.id)}">Crear nuevo: ${escapeHtml(t.nombre)} — ${escapeHtml(t.unidad)}</option>`
+        );
+    });
+
+    return options.join("");
+}
+
 function openChartModal() {
     const modal = document.getElementById("modal-container");
     if (!modal) return;
+
+    const options = buildChartSensorOptions();
     modal.innerHTML = `
       <div class="modal-backdrop">
         <div class="modal">
           <h2>Crear gráfico</h2>
           <form onsubmit="createChart(event)">
             <div class="form-row"><label>Nombre</label><input id="chartNombre" class="form-control" placeholder="Ej. Temperatura ambiente" required></div>
-            <div class="form-row"><label>Sensor</label><select id="chartSensor" class="form-control">${state.sensors.map(s => `<option value="${s.id}">${escapeHtml(s.nombre)}</option>`).join("")}</select></div>
+            <div class="form-row"><label>Sensor</label><select id="chartSensor" class="form-control" required>
+                ${options || `<option value="">No hay tipos de sensores disponibles</option>`}
+            </select></div>
             <div class="form-row"><label>Tipo</label><select id="chartTipo" class="form-control"><option>LINEAL</option><option>AREA</option><option>BARRAS</option></select></div>
             <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear</button></div>
           </form>
@@ -318,16 +466,42 @@ function closeModal() {
 async function createChart(event) {
     event.preventDefault();
     try {
+        const selected = document.getElementById("chartSensor").value;
+        let sensorId;
+
+        if (selected.startsWith("sensor:")) {
+            sensorId = Number(selected.split(":")[1]);
+        } else if (selected.startsWith("tipo:")) {
+            const tipoId = selected.substring("tipo:".length);
+            const tipo = SENSOR_CATALOG.find(t => t.id === tipoId);
+            if (!tipo) throw new Error("El tipo de sensor seleccionado no existe en el catálogo base.");
+
+            const nuevoSensor = await api("/sensores", {
+                method: "POST",
+                body: JSON.stringify({
+                    nombre: `Sensor ${tipo.nombre}`,
+                    tipo: tipo.nombre,
+                    unidad: tipo.unidad,
+                    estado: "ACTIVO",
+                    valorActual: 0
+                })
+            });
+            sensorId = nuevoSensor.id;
+        } else {
+            throw new Error("Debes seleccionar un sensor.");
+        }
+
         await api("/graficos", {
             method: "POST",
             body: JSON.stringify({
                 nombre: document.getElementById("chartNombre").value,
                 tipo: document.getElementById("chartTipo").value,
-                sensorId: Number(document.getElementById("chartSensor").value),
+                sensorId,
                 activo: true
             })
         });
-        state.charts = await api("/graficos?activos=true");
+
+        await loadData();
         closeModal();
         renderDashboard();
     } catch (e) {
@@ -336,34 +510,112 @@ async function createChart(event) {
 }
 
 async function deleteChart(id) {
-    if (!confirm("¿Eliminar este gráfico?")) return;
+    if (!confirm("¿Eliminar este gráfico? El sensor asociado también desaparecerá de la sección Sensores si no tiene otro gráfico.")) return;
     try {
         await api(`/graficos/${id}`, { method:"DELETE" });
-        state.charts = await api("/graficos?activos=true");
+        await loadData();
         renderDashboard();
     } catch(e) { alert(e.message); }
 }
 
+function openSensorModal() {
+    const modal = document.getElementById("modal-container");
+    if (!modal) return;
+    const options = SENSOR_CATALOG.map(t =>
+        `<option value="${escapeHtml(t.id)}">${escapeHtml(t.nombre)} (${escapeHtml(t.unidad)})</option>`
+    ).join("");
+
+    modal.innerHTML = `
+      <div class="modal-backdrop">
+        <div class="modal">
+          <h2>Crear sensor</h2>
+          <form onsubmit="createSensor(event)">
+            <div class="form-row"><label>Tipo de sensor</label><select id="sensorTipoCatalogo" class="form-control" required>${options}</select></div>
+            <div class="form-row"><label>Nombre</label><input id="sensorNombre" class="form-control" placeholder="Ej. Sensor CO₂ 01" required></div>
+            <div class="form-row"><label>Estado</label><select id="sensorEstado" class="form-control"><option>ACTIVO</option><option>INACTIVO</option></select></div>
+            <div class="form-row"><label>Valor inicial</label><input id="sensorValor" class="form-control" type="number" step="0.1" value="0" required></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar sensor</button></div>
+          </form>
+        </div>
+      </div>`;
+}
+
+async function createSensor(event) {
+    event.preventDefault();
+    try {
+        const tipoId = document.getElementById("sensorTipoCatalogo").value;
+        const tipo = SENSOR_CATALOG.find(t => t.id === tipoId);
+        if (!tipo) throw new Error("Selecciona un tipo de sensor válido.");
+
+        await api("/sensores", {
+            method: "POST",
+            body: JSON.stringify({
+                nombre: document.getElementById("sensorNombre").value,
+                tipo: tipo.nombre,
+                unidad: tipo.unidad,
+                estado: document.getElementById("sensorEstado").value,
+                valorActual: Number(document.getElementById("sensorValor").value)
+            })
+        });
+
+        await loadData();
+        closeModal();
+        renderSensors();
+    } catch (e) {
+        alert(e.message || "No se pudo crear el sensor");
+    }
+}
+
 function renderSensors() {
     const main = document.getElementById("main-content");
+
     main.innerHTML = `
-      <h1>Sensores conectados</h1>
-      <div class="cards">
-        ${state.sensors.map(s => `<div class="card"><div class="metric-label">${escapeHtml(s.tipo)}</div><div class="metric-value" id="sensor-metric-${s.id}">${formatValue(s)} ${escapeHtml(s.unidad)}</div></div>`).join("")}
+      <div class="topbar">
+        <h1>Sensores configurados</h1>
+        <button class="btn btn-primary" onclick="openSensorModal()">Agregar sensor</button>
       </div>
+
+      <p class="muted" style="margin-bottom:20px;">
+        Puedes crear tantos sensores como necesites. El sistema dispone de un catálogo base amplio de variables de cultivo y cada tipo tiene su unidad de medida correspondiente.
+      </p>
+
+      <div class="cards">
+        ${state.sensors.map(s => `
+            <div class="card">
+                <div class="metric-label">${escapeHtml(s.tipo)}</div>
+                <div class="metric-value" id="sensor-metric-${s.id}">
+                    ${formatValue(s)} ${escapeHtml(s.unidad)}
+                </div>
+            </div>
+        `).join("") || `<div class="card empty">No hay sensores configurados.</div>`}
+      </div>
+
       <div class="card table-card">
         <table>
-          <thead><tr><th>Sensor</th><th>Estado</th><th>Última lectura</th><th>Valor actual</th></tr></thead>
+          <thead>
+            <tr>
+                <th>Sensor</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+                <th>Última lectura</th>
+                <th>Valor actual</th>
+            </tr>
+          </thead>
           <tbody id="sensor-table">
-          ${state.sensors.map(s => `<tr>
-            <td>${escapeHtml(s.nombre)}</td>
-            <td class="status ${s.estado === "ACTIVO" ? "active":"inactive"}">${escapeHtml(s.estado)}</td>
-            <td>${formatDate(s.ultimaLectura)}</td>
-            <td id="sensor-row-${s.id}">${formatValue(s)} ${escapeHtml(s.unidad)}</td>
-          </tr>`).join("")}
+            ${state.sensors.map(s => `
+                <tr>
+                    <td>${escapeHtml(s.nombre)}</td>
+                    <td>${escapeHtml(s.tipo)}</td>
+                    <td class="status ${s.estado === "ACTIVO" ? "active" : "inactive"}">${escapeHtml(s.estado)}</td>
+                    <td>${formatDate(s.ultimaLectura)}</td>
+                    <td id="sensor-row-${s.id}">${formatValue(s)} ${escapeHtml(s.unidad)}</td>
+                </tr>
+            `).join("") || `<tr><td colspan="5" class="empty">No hay sensores configurados.</td></tr>`}
           </tbody>
         </table>
-      </div>`;
+      </div>
+      <div id="modal-container"></div>
+    `;
 }
 
 function renderReports() {
@@ -445,19 +697,57 @@ function filterReports() {
     `;
 }
 
-function exportReport() {
-    const rows = state.reportData || [];
-    const csv = [
-        ["Fecha","Tipo Sensor","Valor","Unidad"],
-        ...rows.map(r => [r.fecha, r.sensor.tipo, r.valor, r.sensor.unidad])
-    ].map(row => row.map(v => `"${String(v).replaceAll('"','""')}"`).join(";")).join("\n");
+async function exportReport() {
+    const sensor = document.getElementById("reportSensor")?.value || "";
+    const from = document.getElementById("reportFrom")?.value || "";
+    const to = document.getElementById("reportTo")?.value || "";
 
-    const blob = new Blob(["\ufeff" + csv], {type:"text/csv;charset=utf-8;"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "reporte_sensores.csv";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const params = new URLSearchParams();
+
+    if (sensor) {
+        params.set("sensorId", sensor);
+    }
+
+    if (from) {
+        params.set("desde", from);
+    }
+
+    if (to) {
+        params.set("hasta", to);
+    }
+
+    try {
+        const response = await fetch(
+            `${API}/reportes/exportar?${params.toString()}`
+        );
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(
+                text || "No se pudo exportar el reporte"
+            );
+        }
+
+        const blob = await response.blob();
+
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "reporte_sensores.xlsx";
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+
+    } catch (e) {
+        alert(
+            e.message ||
+            "No se pudo exportar el reporte"
+        );
+    }
 }
 
 function formatDate(date) {
@@ -519,10 +809,14 @@ window.navigate = navigate;
 window.login = login;
 window.register = register;
 window.showLoginTab = showLoginTab;
+window.showForgotPassword = showForgotPassword;
+window.forgotPassword = forgotPassword;
 window.logout = logout;
 window.openChartModal = openChartModal;
+window.openSensorModal = openSensorModal;
 window.closeModal = closeModal;
 window.createChart = createChart;
+window.createSensor = createSensor;
 window.deleteChart = deleteChart;
 window.loadReports = loadReports;
 window.filterReports = filterReports;

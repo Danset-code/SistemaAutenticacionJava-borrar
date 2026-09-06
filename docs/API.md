@@ -162,3 +162,23 @@ El mensaje contiene:
 - `404 Not Found`: recurso no encontrado.
 - `409 Conflict`: conflicto, por ejemplo correo duplicado.
 - `500 Internal Server Error`: error no controlado.
+
+## 6. Catálogo de tipos de sensores
+
+Recurso: `/api/tipos-sensores`
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/tipos-sensores` | Lista tipos activos |
+| GET | `/api/tipos-sensores?activos=false` | Lista todos los tipos |
+| GET | `/api/tipos-sensores/{id}` | Consulta un tipo |
+| POST | `/api/tipos-sensores` | Agrega un tipo al catálogo |
+| PUT | `/api/tipos-sensores/{id}` | Actualiza nombre, unidad y cantidad disponible |
+| PATCH | `/api/tipos-sensores/{id}/activo?activo=true|false` | Activa/desactiva un tipo |
+| DELETE | `/api/tipos-sensores/{id}` | Elimina un tipo del catálogo |
+
+El catálogo es independiente de los sensores físicos creados. Por eso eliminar un sensor o un gráfico no elimina su tipo del catálogo.
+
+## 7. Exportación Excel
+
+`GET /api/reportes/exportar` genera un archivo **XLSX real** utilizando Apache POI. Acepta los mismos filtros opcionales del reporte (`sensorId`, `desde`, `hasta`) y responde con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y `Content-Disposition: attachment`.

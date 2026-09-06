@@ -37,46 +37,62 @@ public class LecturaService {
     }
 
     public Lectura crear(LecturaRequest r) {
-        Sensor sensor = sensorRepository.findById(r.getSensorId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor no encontrado"));
+            Sensor sensor = sensorRepository.findById(r.getSensorId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor no encontrado"));
 
-        LocalDateTime fecha = r.getFecha() == null ? LocalDateTime.now() : r.getFecha();
-        Lectura l = new Lectura(sensor, r.getValor(), fecha);
-        sensor.setValorActual(r.getValor());
-        sensor.setUltimaLectura(fecha);
-        sensorRepository.save(sensor);
-        return lecturaRepository.save(l);
+            LocalDateTime fecha = r.getFecha() == null ? LocalDateTime.now() : r.getFecha();
+            Lectura l = new Lectura(sensor, r.getValor(), fecha);
+            sensor.setValorActual(r.getValor());
+            sensor.setUltimaLectura(fecha);
+            sensorRepository.save(sensor);
+            return lecturaRepository.save(l);
+        }
+
+        public void eliminar(Long id) {
+            lecturaRepository.delete(buscar(id));
     }
 
-    public void eliminar(Long id) {
-        lecturaRepository.delete(buscar(id));
+    public List<Lectura> reporteCompleto(
+            Long sensorId,
+            LocalDateTime desde,
+            LocalDateTime hasta
+    ) {
+        if (sensorId != null && desde != null && hasta != null) {
+            return lecturaRepository.findBySensorIdAndFechaBetweenOrderByFechaDesc(sensorId, desde, hasta);
+        }
+
+        if (sensorId != null) {
+            return lecturaRepository.findBySensorIdOrderByFechaDesc(sensorId);
+        }
+
+        if (desde != null && hasta != null) {
+            return lecturaRepository.findByFechaBetweenOrderByFechaDesc(desde, hasta);
+        }
+
+        return lecturaRepository.findAllByOrderByFechaDesc();
     }
 
-    public List<Lectura> reporte(Long sensorId, LocalDateTime desde, LocalDateTime hasta) {
-
-        // Hay sensor y rango de fechas
+    public List<Lectura> reporte(
+            Long sensorId,
+            LocalDateTime desde,
+            LocalDateTime hasta
+    ) {
         if (sensorId != null && desde != null && hasta != null) {
             return lecturaRepository.findTop50BySensorIdAndFechaBetweenOrderByFechaDesc(
-                    sensorId,
-                    desde,
-                    hasta
+                    sensorId, desde, hasta
             );
         }
 
-        // Solo rango de fechas, todos los sensores
-        if (sensorId == null && desde != null && hasta != null) {
-            return lecturaRepository.findTop50ByFechaBetweenOrderByFechaDesc(
-                    desde,
-                    hasta
-            );
-        }
-
-        // Solo un sensor
         if (sensorId != null) {
             return lecturaRepository.findTop50BySensorIdOrderByFechaDesc(sensorId);
         }
 
-        // Todos los sensores
+        if (desde != null && hasta != null) {
+            return lecturaRepository.findTop50ByFechaBetweenOrderByFechaDesc(
+                    desde, hasta
+            );
+        }
+
         return lecturaRepository.findTop50ByOrderByFechaDesc();
     }
 }

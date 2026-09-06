@@ -70,6 +70,12 @@ También se puede registrar un usuario desde la pantalla de acceso.
 - Eliminar gráficos.
 - Actualización de lecturas en tiempo real mediante WebSocket.
 
+### Catálogo de sensores
+- Catálogo independiente de los sensores físicos actualmente creados.
+- Alta de nuevos tipos de sensor con unidad y cantidad disponible.
+- Activación/desactivación y ajuste de cantidad.
+- El catálogo no desaparece cuando se elimina un sensor.
+
 ### Sensores
 - Lista de sensores.
 - Estado.
@@ -81,7 +87,7 @@ También se puede registrar un usuario desde la pantalla de acceso.
 - Consulta de lecturas.
 - Filtro por texto.
 - Filtro por sensor.
-- Exportación de los resultados a CSV compatible con Excel.
+- Exportación de los resultados a un archivo XLSX compatible con Microsoft Excel.
 
 ## Endpoints principales
 
@@ -106,6 +112,12 @@ También se puede registrar un usuario desde la pantalla de acceso.
 }
 ```
 
+### Catálogo de sensores
+- Catálogo independiente de los sensores físicos actualmente creados.
+- Alta de nuevos tipos de sensor con unidad y cantidad disponible.
+- Activación/desactivación y ajuste de cantidad.
+- El catálogo no desaparece cuando se elimina un sensor.
+
 ### Sensores
 
 - `GET /api/sensores`
@@ -114,6 +126,14 @@ También se puede registrar un usuario desde la pantalla de acceso.
 - `PUT /api/sensores/{id}`
 - `PATCH /api/sensores/{id}/estado`
 - `DELETE /api/sensores/{id}`
+
+### Catálogo de tipos de sensores
+- `GET /api/tipos-sensores`
+- `GET /api/tipos-sensores?activos=false`
+- `POST /api/tipos-sensores`
+- `PUT /api/tipos-sensores/{id}`
+- `PATCH /api/tipos-sensores/{id}/activo`
+- `DELETE /api/tipos-sensores/{id}`
 
 ### Gráficos
 

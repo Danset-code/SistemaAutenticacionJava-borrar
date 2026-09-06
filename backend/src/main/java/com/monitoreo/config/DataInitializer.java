@@ -3,10 +3,12 @@ package com.monitoreo.config;
 import com.monitoreo.models.Grafico;
 import com.monitoreo.models.Lectura;
 import com.monitoreo.models.Sensor;
+import com.monitoreo.models.TipoSensor;
 import com.monitoreo.models.Usuario;
 import com.monitoreo.repositories.GraficoRepository;
 import com.monitoreo.repositories.LecturaRepository;
 import com.monitoreo.repositories.SensorRepository;
+import com.monitoreo.repositories.TipoSensorRepository;
 import com.monitoreo.repositories.UsuarioRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
@@ -25,6 +27,7 @@ public class DataInitializer {
     CommandLineRunner init(
             UsuarioRepository usuarioRepository,
             SensorRepository sensorRepository,
+            TipoSensorRepository tipoSensorRepository,
             GraficoRepository graficoRepository,
             LecturaRepository lecturaRepository,
             PasswordEncoder passwordEncoder) {
@@ -36,6 +39,13 @@ public class DataInitializer {
                 admin.setCorreo("admin@monitoreo.com");
                 admin.setPassword(passwordEncoder.encode("Admin123"));
                 usuarioRepository.save(admin);
+            }
+
+            // Catálogo independiente de los sensores físicos actualmente creados.
+            if (tipoSensorRepository.count() == 0) {
+                tipoSensorRepository.save(new TipoSensor("Temperatura", "°C", 5));
+                tipoSensorRepository.save(new TipoSensor("Humedad", "%", 5));
+                tipoSensorRepository.save(new TipoSensor("CO₂", "ppm", 5));
             }
 
             if (sensorRepository.count() == 0) {
