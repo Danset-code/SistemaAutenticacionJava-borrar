@@ -4,7 +4,7 @@ const isLocal =
 
 const BACKEND_HOST = isLocal
     ? "localhost:8080"
-    : "sistema-monitoreo-backend.onrender.com";
+    : "backend-sistemaautenticacionjava-borrar.onrender.com";
 
 const API = isLocal
     ? `http://${BACKEND_HOST}/api`
