@@ -1,5 +1,18 @@
-const API = "http://localhost:8080/api";
-const WS_URL = "ws://localhost:8080/ws/sensores";
+const isLocal =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+const BACKEND_HOST = isLocal
+    ? "localhost:8080"
+    : "backend-sistemaautenticacionjava-borrar.onrender.com";
+
+const API = isLocal
+    ? `http://${BACKEND_HOST}/api`
+    : `https://${BACKEND_HOST}/api`;
+
+const WS_URL = isLocal
+    ? `ws://${BACKEND_HOST}/ws/sensores`
+    : `wss://${BACKEND_HOST}/ws/sensores`;
 
 const SENSOR_CATALOG = [
     // Ambiente
