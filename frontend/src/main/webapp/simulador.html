@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador de Microcontroladores - Monitoreo</title>
+<style>
+:root{--bg:#0f141a;--panel:#171e27;--panel2:#1d2631;--text:#edf2f7;--muted:#9eabb8;--ok:#35d07f;--warn:#f4bd4f;--danger:#ff6b6b;--accent:#62d49a;--line:#2b3744}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{padding:18px 24px;border-bottom:1px solid var(--line);background:#121820;display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+header h1{margin:0;font-size:22px}header small{color:var(--muted)}
+.wrap{max-width:1400px;margin:0 auto;padding:20px}.grid{display:grid;grid-template-columns:360px 1fr;gap:18px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.panel h2{font-size:15px;margin:0 0 14px}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field{margin-bottom:11px}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}.field input,.field select{width:100%;padding:10px;border-radius:9px;border:1px solid var(--line);background:#0e141b;color:var(--text)}button{border:0;border-radius:9px;padding:10px 13px;font-weight:700;cursor:pointer}button.primary{background:var(--accent);color:#09130e}button.secondary{background:#273342;color:var(--text)}button.danger{background:#4b252b;color:#ffd9dc}button:disabled{opacity:.45;cursor:not-allowed}.status{font-size:12px;padding:8px 10px;border-radius:999px;display:inline-flex;align-items:center;gap:7px;background:#202a35;color:var(--muted)}.dot{width:8px;height:8px;border-radius:50%;background:#8a94a0}.dot.ok{background:var(--ok)}.dot.bad{background:var(--danger)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}.card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:15px}.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.name{font-weight:700}.type{color:var(--muted);font-size:12px}.value{font-size:28px;font-weight:800;margin:14px 0 4px}.meta{font-size:12px;color:var(--muted)}.actions{display:flex;gap:7px;margin-top:12px;flex-wrap:wrap}.log{height:210px;overflow:auto;background:#0b1016;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:Consolas,monospace;font-size:11px;white-space:pre-wrap}.hint{font-size:12px;color:var(--muted);line-height:1.5}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.pill{font-size:11px;padding:4px 7px;border-radius:999px;background:#273342}.pill.ok{background:#173f2b;color:#8ff0ba}.pill.off{background:#4a2027;color:#ffb3b3}.footer-note{margin-top:12px;font-size:11px;color:var(--muted)}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Simulador de microcontroladores</h1><small>Envía lecturas secuencialmente al backend como si fueran sensores físicos.</small></div>
+  <div class="status"><span id="wsDot" class="dot"></span><span id="wsText">WebSocket desconectado</span></div>
+</header>
+<div class="wrap">
+  <div class="grid">
+    <section class="panel">
+      <h2>Configuración</h2>
+      <div class="field"><label>API del backend</label><input id="apiUrl" value="http://localhost:8080/api"></div>
+      <div class="field"><label>WebSocket</label><input id="wsUrl" value="ws://localhost:8080/ws/sensores"></div>
+      <div class="row">
+        <div class="field"><label>Intervalo entre envíos (ms)</label><input id="interval" type="number" min="500" step="100" value="2000"></div>
+        <div class="field"><label>Timeout de comunicación esperado (s)</label><input id="timeout" type="number" min="5" value="10" disabled></div>
+      </div>
+      <div class="toolbar">
+        <button class="primary" id="startBtn">Iniciar secuencia</button>
+        <button class="secondary" id="stopBtn">Detener secuencia</button>
+        <button class="secondary" id="refreshBtn">Actualizar sensores</button>
+      </div>
+
+      <h2 style="margin-top:22px">Crear sensor</h2>
+      <div class="field"><label>Nombre</label><input id="sensorName" placeholder="Ej. Temperatura Invernadero 01"></div>
+      <div class="row"><div class="field"><label>Device ID</label><input id="deviceId" placeholder="Ej. ESP32-001"></div><div class="field"><label>Canal</label><input id="channel" placeholder="Ej. 1"></div></div>
+      <div class="field"><label>Tipo</label><select id="sensorType"></select></div>
+      <div class="row">
+        <div class="field"><label>Unidad</label><input id="sensorUnit" value="ppm"></div>
+        <div class="field"><label>Valor inicial</label><input id="sensorValue" type="number" value="0" step="0.1"></div>
+      </div>
+      <button class="primary" id="createBtn">Crear sensor y conectar</button>
+      <p class="hint">Al crear un sensor, se registra en <b>/api/sensores</b> y se incorpora automáticamente a la secuencia.</p>
+
+      <h2 style="margin-top:22px">Secuencia</h2>
+      <p class="hint">Solo se envía una lectura por turno. Con 4 sensores y 2000 ms, cada sensor recibe una lectura aproximadamente cada 8 segundos.</p>
+      <div class="log" id="log"></div>
+    </section>
+
+    <section>
+      <div class="panel" style="margin-bottom:18px">
+        <div class="card-head"><div><h2 style="margin-bottom:4px">Sensores simulados</h2><div class="hint">El estado cambia automáticamente a INACTIVO cuando el backend detecta que dejó de recibir lecturas.</div></div><span class="pill" id="seqStatus">Secuencia detenida</span></div>
+      </div>
+      <div class="cards" id="cards"></div>
+    </section>
+  </div>
+  <div class="footer-note">Para ejecutar esta página sin problemas de CORS, colócala en <b>frontend/src/main/webapp/simulador.html</b> y abre <b>http://localhost:8081/monitoreo/simulador.html</b>.</div>
+</div>
+
+<script>
+let sensors=[];
+let running=false;
+let timer=null;
+let cursor=0;
+let ws=null;
+let types=[];
+
+  const SENSOR_CATALOG = [
+    // Ambiente
+    {id: "temperatura-aire", nombre: "Temperatura del aire", unidad: "°C"},
+    {id: "humedad-aire", nombre: "Humedad relativa", unidad: "%RH"},
+    {id: "co2", nombre: "CO₂", unidad: "ppm"},
+    {id: "presion-atmosferica", nombre: "Presión atmosférica", unidad: "hPa"},
+
+    // Luz y radiación
+    {id: "par", nombre: "Radiación PAR", unidad: "µmol/m²/s"},
+    {id: "radiacion-solar", nombre: "Radiación solar", unidad: "W/m²"},
+    {id: "uv", nombre: "Índice UV", unidad: "UV Index"},
+
+    // Planta / superficie foliar
+    {id: "temperatura-hoja", nombre: "Temperatura de hoja", unidad: "°C"},
+    {id: "humedad-foliar", nombre: "Humedad foliar", unidad: "%"},
+
+    // Sustrato / suelo
+    {id: "humedad-sustrato", nombre: "Humedad del sustrato", unidad: "%VWC"},
+    {id: "temperatura-sustrato", nombre: "Temperatura del sustrato", unidad: "°C"},
+    {id: "ph-sustrato", nombre: "pH del sustrato", unidad: "pH"},
+    {id: "ec-sustrato", nombre: "Conductividad eléctrica del sustrato", unidad: "mS/cm"},
+
+    // Agua / fertirriego
+    {id: "temperatura-agua", nombre: "Temperatura del agua", unidad: "°C"},
+    {id: "ph-agua", nombre: "pH del agua", unidad: "pH"},
+    {id: "ec-agua", nombre: "Conductividad eléctrica del agua", unidad: "mS/cm"},
+    {id: "oxigeno-disuelto", nombre: "Oxígeno disuelto", unidad: "mg/L"},
+    {id: "orp", nombre: "Potencial ORP", unidad: "mV"},
+    {id: "salinidad", nombre: "Salinidad", unidad: "ppt"},
+    {id: "nivel-agua", nombre: "Nivel de agua", unidad: "%"},
+    {id: "caudal", nombre: "Caudal de riego", unidad: "L/min"},
+    {id: "presion-riego", nombre: "Presión de riego", unidad: "bar"},
+    {id: "nitratos", nombre: "Nitratos (NO₃⁻)", unidad: "mg/L"},
+  ];
+
+const ranges = {"temperatura del aire": [20, 32], temperatura: [20, 32], "humedad relativa": [55, 85], humedad: [55, 85], "co₂": [380, 520], co2: [380, 520], "presión atmosférica": [990, 1030], presion: [990, 1030], "radiación par": [300, 1000], par: [300, 1000], "radiación solar": [200, 1000], "índice uv": [0, 11], uv: [0, 11], "temperatura de hoja": [20, 32], "humedad foliar": [50, 90], "humedad del sustrato": [35, 75], "temperatura del sustrato": [18, 28], "ph del sustrato": [5.5, 7.5], "conductividad eléctrica del sustrato": [0.5, 3], "temperatura del agua": [18, 28], "ph del agua": [5.5, 7.5], "conductividad eléctrica del agua": [0.2, 2.5], "oxígeno disuelto": [5, 10], "potencial orp": [100, 500], "salinidad": [0, 5], "nivel de agua": [20, 100], "caudal de riego": [1, 20], "presión de riego": [1, 5], "nitratos (no₃⁻)": [5, 150], default: [10, 90]};
+const $=id=>document.getElementById(id);
+function apiBase(){return $('apiUrl').value.replace(/\/$/,'');}
+function log(msg){const t=new Date().toLocaleTimeString('es-CO');$('log').textContent+=`[${t}] ${msg}\n`; $('log').scrollTop=$('log').scrollHeight;}
+function norm(v){return String(v||'').trim().toLowerCase();}
+function rangeFor(type){return ranges[norm(type)] || ranges.default;}
+function randomValue(type){const [a,b]=rangeFor(type);return Math.round((a+Math.random()*(b-a))*10)/10;}
+function fmtDate(v){if(!v)return '-';return new Date(v).toLocaleString('es-CO');}
+function stateClass(s){return String(s||'').toUpperCase()==='ACTIVO'?'ok':'off';}
+function render(){
+  $('seqStatus').textContent=running?'Secuencia activa':'Secuencia detenida';
+  $('seqStatus').className='pill '+(running?'ok':'');
+  $('cards').innerHTML=sensors.length?sensors.map(s=>`<div class="card">
+    <div class="card-head"><div><div class="name">${esc(s.nombre)}</div><div class="type">${esc(s.tipo)} · ${esc(s.unidad)}</div></div><span class="pill ${stateClass(s.estado)}">${esc(s.estado)}</span></div>
+    <div class="value">${Number(s.valorActual??0).toFixed(1)} <span style="font-size:14px;font-weight:600;color:var(--muted)">${esc(s.unidad)}</span></div>
+    <div class="meta">Última lectura: ${fmtDate(s.ultimaLectura)}</div>
+    <div class="meta">DB ID: ${s.id} · Device: ${esc(s.deviceId||"-")} · Canal: ${esc(s.canal||"-")}</div>
+    <div class="actions"><button class="${s.simConnected?'danger':'primary'}" onclick="toggleSimulation(${s.id})">${s.simConnected?'Interrumpir comunicación':'Reconectar'}</button><button class="secondary" onclick="sendNow(${s.id})">Enviar ahora</button></div>
+  </div>`).join(''):'<div class="card"><div class="hint">No hay sensores todavía.</div></div>';
+}
+function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));}
+async function request(path, options={}){
+  const r=await fetch(apiBase()+path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
+  const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
+  if(!r.ok)throw new Error(data.message||`HTTP ${r.status}`);return data;
+}
+  async function loadTypes() { 
+    /* * Primero intentamos cargar los tipos * configurados en el backend. */ 
+    try {const backendTypes = await request('/tipos-sensores?activos=true'); 
+    /* * Si el backend tiene tipos, * los usamos. */ 
+    if (Array.isArray(backendTypes) && backendTypes.length > 0) {types = backendTypes;} 
+    else { /* * Si no hay tipos en backend, * utilizamos el catálogo completo. */ types = SENSOR_CATALOG.map(s => ({nombre: s.nombre, unidad: s.unidad}));} } catch { /* * Si el endpoint no existe, * falla o no responde, * usamos directamente el catálogo. */ types = SENSOR_CATALOG.map(s => ({nombre: s.nombre, unidad: s.unidad}));} $('sensorType').innerHTML = types.map(t => ` <option value="${esc(t.nombre)}" data-unit="${esc(t.unidad)}" > ${esc(t.nombre)} (${esc(t.unidad)}) </option> `).join(''); 
+  updateUnit();}
+function updateUnit(){const o=$('sensorType').selectedOptions[0];if(o)$('sensorUnit').value=o.dataset.unit||'';}
+async function loadSensors(){
+  try{
+    const data=await request('/sensores');
+    const old=new Map(sensors.map(x=>[x.id,x]));
+    sensors=data.map(s=>({...s,simConnected:old.get(s.id)?.simConnected ?? true}));
+    render();
+  }catch(e){log('ERROR cargando sensores: '+e.message)}
+}
+async function createSensor(){
+  const nombre=$('sensorName').value.trim();const tipo=$('sensorType').value;const unidad=$('sensorUnit').value.trim();const valor=Number($('sensorValue').value||0);const deviceId=$('deviceId').value.trim();const canal=$('channel').value.trim();
+  if(!nombre||!tipo||!unidad||!deviceId||!canal){alert('Completa nombre, tipo, unidad, deviceId y canal.');return;}
+  try{
+    const s=await request('/sensores',{method:'POST',body:JSON.stringify({nombre,tipo,unidad,valorActual:valor,deviceId,canal})});
+    s.simConnected=true;sensors.push(s);render();log(`Sensor creado: #${s.id} ${s.nombre} (${s.tipo})`);
+    $('sensorName').value='';
+    if(!running) startSequence();
+  }catch(e){alert('No se pudo crear el sensor: '+e.message);log('ERROR creando sensor: '+e.message)}
+}
+async function sendReading(sensor){
+  if(!sensor.simConnected)return;
+  const valor=randomValue(sensor.tipo);
+  try{
+    const payload={valor,fecha:localDateTime()}; 
+    if(sensor.deviceId&&sensor.canal){payload.deviceId=sensor.deviceId;payload.canal=sensor.canal;
+      payload.tipo=sensor.tipo;payload.unidad=sensor.unidad;}else{payload.sensorId=sensor.id;} 
+      const l=await request('/lecturas',{method:'POST',body:JSON.stringify(payload)});
+
+    sensor.valorActual=valor;sensor.ultimaLectura=l.fecha||localDateTime();sensor.estado='ACTIVO';
+    log(`TX sensor #${sensor.id} ${sensor.tipo}: ${valor} ${sensor.unidad}`);
+    render();
+  }catch(e){log(`ERROR TX #${sensor.id}: ${e.message}`);}
+}
+function localDateTime(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
+async function sendNow(id){const s=sensors.find(x=>x.id===id);if(s){s.simConnected=true;await sendReading(s);}}
+function next(){
+  if(!running||!sensors.length)return;
+  let checked=0;
+  while(checked<sensors.length){const s=sensors[cursor%sensors.length];cursor=(cursor+1)%sensors.length;checked++;if(s.simConnected){sendReading(s);break;}}
+}
+function startSequence(){if(running)return;running=true;cursor=cursor%sensors.length||0;render();log('Secuencia de transmisión iniciada');clearInterval(timer);timer=setInterval(next,Math.max(500,Number($('interval').value||2000)));next();}
+function stopSequence(){running=false;clearInterval(timer);timer=null;render();log('Secuencia detenida');}
+window.toggleSimulation=function(id){const s=sensors.find(x=>x.id===id);if(!s)return;s.simConnected=!s.simConnected;log(`${s.simConnected?'RECONEXIÓN':'INTERRUPCIÓN'} del sensor #${id} ${s.nombre}`);render();};
+function connectWs(){
+  try{
+    ws=new WebSocket($('wsUrl').value);
+    ws.onopen=()=>{$('wsDot').className='dot ok';$('wsText').textContent='WebSocket conectado';log('WebSocket conectado al backend');};
+    ws.onclose=()=>{$('wsDot').className='dot bad';$('wsText').textContent='WebSocket desconectado';setTimeout(connectWs,2500);};
+    ws.onerror=()=>{$('wsDot').className='dot bad';$('wsText').textContent='Error WebSocket';};
+    ws.onmessage=e=>{try{const m=JSON.parse(e.data);const s=sensors.find(x=>x.id==m.sensorId);if(s){if(m.valor!==undefined)s.valorActual=Number(m.valor);if(m.fecha)s.ultimaLectura=m.fecha;if(m.estado)s.estado=m.estado;render();}}catch{}};
+  }catch{setTimeout(connectWs,2500);}
+}
+$('sensorType').addEventListener('change',updateUnit);
+$('createBtn').addEventListener('click',createSensor);
+$('startBtn').addEventListener('click',startSequence);
+$('stopBtn').addEventListener('click',stopSequence);
+$('refreshBtn').addEventListener('click',loadSensors);
+(async()=>{await loadTypes();await loadSensors();connectWs();})();
+</script>
+</body>
+</html>

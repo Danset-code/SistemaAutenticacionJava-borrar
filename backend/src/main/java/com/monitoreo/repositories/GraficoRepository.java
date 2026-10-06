@@ -16,4 +16,7 @@ public interface GraficoRepository extends JpaRepository<Grafico, Long> {
     void deleteBySensorId(Long sensorId);
 
     long countBySensorId(Long sensorId);
+
+    java.util.Optional<Grafico> findFirstBySensorIdOrderByIdAsc(Long sensorId);
+    boolean existsBySensorId(Long sensorId);
 }

@@ -182,3 +182,20 @@ El catálogo es independiente de los sensores físicos creados. Por eso eliminar
 ## 7. Exportación Excel
 
 `GET /api/reportes/exportar` genera un archivo **XLSX real** utilizando Apache POI. Acepta los mismos filtros opcionales del reporte (`sensorId`, `desde`, `hasta`) y responde con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y `Content-Disposition: attachment`.
+
+## Vinculación física de sensores
+
+Las lecturas pueden enviarse utilizando `deviceId` y `canal` en lugar de `sensorId`:
+
+```json
+{
+  "deviceId": "ESP32-001",
+  "canal": "1",
+  "tipo": "CO2",
+  "unidad": "ppm",
+  "valor": 450.0,
+  "fecha": "2026-09-10T18:30:00"
+}
+```
+
+La combinación `deviceId + canal` identifica de forma única un sensor físico dentro del sistema y permite tener varios sensores del mismo tipo en el mismo microcontrolador.

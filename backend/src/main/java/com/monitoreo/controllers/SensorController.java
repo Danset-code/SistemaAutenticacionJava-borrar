@@ -32,11 +32,6 @@ public class SensorController {
         return ResponseEntity.ok(service.actualizar(id, request));
     }
 
-    @PatchMapping("/{id}/estado")
-    public ResponseEntity<Sensor> cambiarEstado(@PathVariable Long id, @RequestParam String estado) {
-        return ResponseEntity.ok(service.cambiarEstado(id, estado));
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<?> eliminar(@PathVariable Long id) {
         service.eliminar(id);

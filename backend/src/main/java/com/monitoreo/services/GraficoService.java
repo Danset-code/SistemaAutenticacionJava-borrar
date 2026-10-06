@@ -4,7 +4,6 @@ import com.monitoreo.dto.GraficoRequest;
 import com.monitoreo.models.Grafico;
 import com.monitoreo.models.Sensor;
 import com.monitoreo.repositories.GraficoRepository;
-import com.monitoreo.repositories.LecturaRepository;
 import com.monitoreo.repositories.SensorRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -17,15 +16,12 @@ import java.util.List;
 public class GraficoService {
     private final GraficoRepository graficoRepository;
     private final SensorRepository sensorRepository;
-    private final LecturaRepository lecturaRepository;
 
     public GraficoService(
             GraficoRepository graficoRepository,
-            SensorRepository sensorRepository,
-            LecturaRepository lecturaRepository) {
+            SensorRepository sensorRepository) {
         this.graficoRepository = graficoRepository;
         this.sensorRepository = sensorRepository;
-        this.lecturaRepository = lecturaRepository;
     }
 
     public List<Grafico> listar() { return graficoRepository.findAll(); }
@@ -38,9 +34,31 @@ public class GraficoService {
 
     public Grafico crear(GraficoRequest r) {
         Sensor sensor = sensorRepository.findById(r.getSensorId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Sensor no encontrado"));
-        Grafico g = new Grafico(r.getNombre().trim(), r.getTipo().trim().toUpperCase(),
-                sensor, r.getActivo());
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Sensor no encontrado"
+                        )
+                );
+
+        /*
+         * Un sensor/canal puede tener un solo gráfico.
+         */
+        if (graficoRepository.existsBySensorId(sensor.getId())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Este sensor ya tiene un gráfico asociado"
+            );
+        }
+
+        Grafico g = new Grafico(
+                r.getNombre().trim(),
+                r.getTipo().trim().toUpperCase(),
+                sensor,
+                r.getActivo()
+        );
+
         return graficoRepository.save(g);
     }
 
@@ -69,14 +87,9 @@ public class GraficoService {
     @Transactional
     public void eliminar(Long id) {
         Grafico grafico = buscar(id);
-        Long sensorId = grafico.getSensor().getId();
+        //Long sensorId = grafico.getSensor().getId();
 
         graficoRepository.delete(grafico);
         graficoRepository.flush();
-
-        if (graficoRepository.countBySensorId(sensorId) == 0) {
-            lecturaRepository.deleteBySensorId(sensorId);
-            sensorRepository.deleteById(sensorId);
-        }
     }
 }

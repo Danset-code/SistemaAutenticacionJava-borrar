@@ -300,6 +300,28 @@ async function loadData() {
     }
 }
 
+async function refreshSensorStatuses() {
+    try {
+        const sensors = await api("/sensores");
+
+        sensors.forEach(updated => {
+            const sensor = state.sensors.find(s => s.id === updated.id);
+
+            if (sensor) {
+                sensor.estado = updated.estado;
+                sensor.ultimaLectura = updated.ultimaLectura;
+                sensor.valorActual = updated.valorActual;
+            }
+        });
+
+        if (state.page === "sensores") {
+            renderSensors();
+        }
+    } catch (e) {
+        console.error("Error actualizando estados de sensores:", e);
+    }
+}
+
 function seedHistory() {
     state.sensors.forEach(s => {
         const values = state.readings.filter(r => r.sensor.id === s.id).slice(0, 18).reverse();
@@ -432,43 +454,249 @@ function findSensorDefinition(typeOrName) {
 function buildChartSensorOptions() {
     const options = [];
 
-    // Primero mostramos los sensores que ya existen en el sistema.
     state.sensors.forEach(s => {
-        options.push(
-            `<option value="sensor:${s.id}">${escapeHtml(s.nombre)} — ${escapeHtml(s.tipo)} (${escapeHtml(s.unidad)})</option>`
-        );
+        const link = s.deviceId ? ` · ${s.deviceId}${s.canal ? ` / canal ${s.canal}` : ""}` : "";
+        options.push(`<option value="sensor:${escapeHtml(s.id)}">${escapeHtml(s.nombre)} · ${escapeHtml(s.tipo)}${escapeHtml(link)}</option>`);
     });
 
-    // Después mostramos TODO el catálogo base para poder crear sensores nuevos
-    // sin depender de los sensores que ya existan en la base de datos.
     SENSOR_CATALOG.forEach(t => {
-        options.push(
-            `<option value="tipo:${escapeHtml(t.id)}">Crear nuevo: ${escapeHtml(t.nombre)} — ${escapeHtml(t.unidad)}</option>`
-        );
+        options.push(`<option value="tipo:${escapeHtml(t.id)}">Nuevo ${escapeHtml(t.nombre)}</option>`);
     });
 
     return options.join("");
 }
 
 function openChartModal() {
+
     const modal = document.getElementById("modal-container");
+
     if (!modal) return;
 
-    const options = buildChartSensorOptions();
+    /*
+     * Solo mostramos sensores que:
+     *
+     * 1. Tienen deviceId
+     * 2. Tienen canal
+     * 3. Todavía NO tienen un gráfico activo
+     *
+     * El sensor puede existir perfectamente sin gráfico.
+     */
+    const availableSensors = state.sensors
+        .filter(s =>
+            s.deviceId &&
+            s.canal !== undefined &&
+            s.canal !== null &&
+            String(s.canal).trim() !== "" &&
+            !state.charts.some(g =>
+                g.sensor &&
+                String(g.sensor.id) === String(s.id)
+            )
+        )
+        .sort((a, b) => {
+
+            const deviceCompare =
+                String(a.deviceId).localeCompare(
+                    String(b.deviceId)
+                );
+
+            if (deviceCompare !== 0) {
+                return deviceCompare;
+            }
+
+            return String(a.canal).localeCompare(
+                String(b.canal),
+                undefined,
+                { numeric: true }
+            );
+        });
+
+    const options = availableSensors
+        .map(s => `
+            <option value="${escapeHtml(s.id)}">
+                ${escapeHtml(s.deviceId)}
+                · Canal ${escapeHtml(s.canal)}
+                · ${escapeHtml(s.tipo)}
+            </option>
+        `)
+        .join("");
+
     modal.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal">
-          <h2>Crear gráfico</h2>
-          <form onsubmit="createChart(event)">
-            <div class="form-row"><label>Nombre</label><input id="chartNombre" class="form-control" placeholder="Ej. Temperatura ambiente" required></div>
-            <div class="form-row"><label>Sensor</label><select id="chartSensor" class="form-control" required>
-                ${options || `<option value="">No hay tipos de sensores disponibles</option>`}
-            </select></div>
-            <div class="form-row"><label>Tipo</label><select id="chartTipo" class="form-control"><option>LINEAL</option><option>AREA</option><option>BARRAS</option></select></div>
-            <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear</button></div>
-          </form>
+        <div class="modal-backdrop">
+
+            <div class="modal">
+
+                <h2>Crear gráfico</h2>
+
+                <form onsubmit="createChart(event)">
+
+                    <div class="form-row">
+                        <label>
+                            Nombre del gráfico
+                        </label>
+
+                        <input
+                            id="chartNombre"
+                            class="form-control"
+                            placeholder="Ej. Temperatura Invernadero 01"
+                            maxlength="100"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-row">
+
+                        <label>
+                            Canal del microcontrolador
+                        </label>
+
+                        <select
+                            id="chartSensor"
+                            class="form-control"
+                            required
+                        >
+
+                            ${
+                                options ||
+                                `<option value="">
+                                    No hay canales disponibles para graficar
+                                </option>`
+                            }
+
+                        </select>
+
+                    </div>
+
+                    <div
+                        id="chart-channel-info"
+                        class="hint"
+                        style="margin-top:-4px;margin-bottom:14px;"
+                    ></div>
+
+                    <div class="form-row">
+
+                        <label>
+                            Tipo de gráfico
+                        </label>
+
+                        <select
+                            id="chartTipo"
+                            class="form-control"
+                            required
+                        >
+
+                            <option value="LINEAL">
+                                Línea
+                            </option>
+
+                            <option value="AREA">
+                                Área
+                            </option>
+
+                            <option value="BARRAS">
+                                Barras
+                            </option>
+
+                        </select>
+
+                    </div>
+
+                    <div
+                        style="
+                            display:flex;
+                            gap:10px;
+                            justify-content:flex-end;
+                            margin-top:18px;
+                        "
+                    >
+
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            onclick="closeModal()"
+                        >
+                            Cancelar
+                        </button>
+
+                        <button
+                            class="btn btn-primary"
+                            ${
+                                availableSensors.length === 0
+                                    ? "disabled"
+                                    : ""
+                            }
+                        >
+                            Crear gráfico
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </div>
+
         </div>
-      </div>`;
+    `;
+
+    const select =
+        document.getElementById("chartSensor");
+
+    const info =
+        document.getElementById("chart-channel-info");
+
+    function updateChannelInfo() {
+
+        if (!select || !info) return;
+
+        const sensor =
+            state.sensors.find(
+                s =>
+                    String(s.id) ===
+                    String(select.value)
+            );
+
+        if (!sensor) {
+
+            info.textContent =
+                "No hay un canal seleccionado.";
+
+            return;
+        }
+
+        info.innerHTML = `
+            <b>Microcontrolador:</b>
+            ${escapeHtml(sensor.deviceId)}
+
+            ·
+
+            <b>Canal:</b>
+            ${escapeHtml(sensor.canal)}</br>
+
+            <b>Sensor:</b>
+            ${escapeHtml(sensor.tipo)}
+
+            ·
+
+            <b>Unidad:</b>
+            ${escapeHtml(sensor.unidad)}
+        `;
+    }
+
+    if (select) {
+
+        select.addEventListener(
+            "change",
+            updateChannelInfo
+        );
+
+        updateChannelInfo();
+    }
+}
+
+function toggleChartLinkFields() {
+    const select = document.getElementById("chartSensor");
+    const fields = document.getElementById("chart-link-fields");
+    if (!select || !fields) return;
+    fields.style.display = select.value.startsWith("tipo:") ? "block" : "none";
 }
 
 function closeModal() {
@@ -476,50 +704,58 @@ function closeModal() {
     if (m) m.remove();
 }
 
-async function createChart(event) {
-    event.preventDefault();
-    try {
-        const selected = document.getElementById("chartSensor").value;
-        let sensorId;
-
-        if (selected.startsWith("sensor:")) {
-            sensorId = Number(selected.split(":")[1]);
-        } else if (selected.startsWith("tipo:")) {
-            const tipoId = selected.substring("tipo:".length);
-            const tipo = SENSOR_CATALOG.find(t => t.id === tipoId);
-            if (!tipo) throw new Error("El tipo de sensor seleccionado no existe en el catálogo base.");
-
-            const nuevoSensor = await api("/sensores", {
-                method: "POST",
-                body: JSON.stringify({
-                    nombre: `Sensor ${tipo.nombre}`,
-                    tipo: tipo.nombre,
-                    unidad: tipo.unidad,
-                    estado: "ACTIVO",
-                    valorActual: 0
-                })
-            });
-            sensorId = nuevoSensor.id;
-        } else {
-            throw new Error("Debes seleccionar un sensor.");
-        }
-
-        await api("/graficos", {
-            method: "POST",
+async function createChart(event) { 
+    event.preventDefault(); 
+    try {  
+        const sensorId = Number( document.getElementById( "chartSensor" ).value ); 
+        const chartNombre = document.getElementById( "chartNombre" ).value.trim(); 
+        const chartTipo = document.getElementById( "chartTipo" ).value; 
+        
+        if (!chartNombre) { 
+            throw new Error( "Debes ingresar un nombre para el gráfico." ); 
+        } 
+        if (!sensorId) { 
+            throw new Error( "Debes seleccionar un canal disponible." ); 
+        } 
+        const sensor = state.sensors.find( s => Number(s.id) === sensorId ); 
+        if (!sensor) { 
+            throw new Error( "El canal seleccionado ya no existe." ); 
+        } 
+        const nuevoGrafico = await api( "/graficos", { 
+            method:"POST", 
+            body: JSON.stringify({ 
+                nombre: chartNombre, 
+                tipo: chartTipo, 
+                sensorId: sensorId, 
+                activo: true }) } );
+        const readings = await api( `/lecturas/sensor/${sensorId}` ); 
+        const history = Array.isArray(readings) ? readings 
+                .slice(0,100) 
+                .reverse() 
+                .map(r => ({ 
+            value: Number(r.valor), 
+            date: r.fecha })) : []; 
+        state.chartHistory[sensorId] = history; 
+        state.charts = await api( "/graficos?activos=true" );  
+        closeModal();  
+        renderDashboard();
+        
+        await api(`/sensores/${sensorId}`, {
+            method: "PUT",
             body: JSON.stringify({
-                nombre: document.getElementById("chartNombre").value,
-                tipo: document.getElementById("chartTipo").value,
-                sensorId,
-                activo: true
+                nombre: chartNombre,
+                tipo: sensor.tipo,
+                unidad: sensor.unidad,
+                valorActual: sensor.valorActual ?? 0,
+                estado: sensor.estado,
+                deviceId: sensor.deviceId,
+                canal: sensor.canal
             })
         });
-
-        await loadData();
-        closeModal();
-        renderDashboard();
-    } catch (e) {
-        alert(e.message);
-    }
+    } 
+    catch (e) { console.error( "Error creando gráfico:", e ); 
+        alert( e.message || "No se pudo crear el gráfico." ); 
+    } 
 }
 
 async function deleteChart(id) {
@@ -545,7 +781,8 @@ function openSensorModal() {
           <form onsubmit="createSensor(event)">
             <div class="form-row"><label>Tipo de sensor</label><select id="sensorTipoCatalogo" class="form-control" required>${options}</select></div>
             <div class="form-row"><label>Nombre</label><input id="sensorNombre" class="form-control" placeholder="Ej. Sensor CO₂ 01" required></div>
-            <div class="form-row"><label>Estado</label><select id="sensorEstado" class="form-control"><option>ACTIVO</option><option>INACTIVO</option></select></div>
+            <div class="form-row"><label>Device ID</label><input id="sensorDeviceId" class="form-control" placeholder="Ej. ESP32-001" required></div>
+            <div class="form-row"><label>Canal / sensor físico</label><input id="sensorCanal" class="form-control" placeholder="Ej. 1" required></div>
             <div class="form-row"><label>Valor inicial</label><input id="sensorValor" class="form-control" type="number" step="0.1" value="0" required></div>
             <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar sensor</button></div>
           </form>
@@ -560,14 +797,19 @@ async function createSensor(event) {
         const tipo = SENSOR_CATALOG.find(t => t.id === tipoId);
         if (!tipo) throw new Error("Selecciona un tipo de sensor válido.");
 
+        const deviceId = document.getElementById("sensorDeviceId").value.trim();
+        const canal = document.getElementById("sensorCanal").value.trim();
+        if (!deviceId || !canal) throw new Error("Debes indicar el deviceId y el canal del sensor físico.");
+
         await api("/sensores", {
             method: "POST",
             body: JSON.stringify({
                 nombre: document.getElementById("sensorNombre").value,
                 tipo: tipo.nombre,
                 unidad: tipo.unidad,
-                estado: document.getElementById("sensorEstado").value,
-                valorActual: Number(document.getElementById("sensorValor").value)
+                valorActual: Number(document.getElementById("sensorValor").value),
+                deviceId,
+                canal
             })
         });
 
@@ -609,6 +851,8 @@ function renderSensors() {
             <tr>
                 <th>Sensor</th>
                 <th>Tipo</th>
+                <th>Device ID</th>
+                <th>Canal</th>
                 <th>Estado</th>
                 <th>Última lectura</th>
                 <th>Valor actual</th>
@@ -619,11 +863,13 @@ function renderSensors() {
                 <tr>
                     <td>${escapeHtml(s.nombre)}</td>
                     <td>${escapeHtml(s.tipo)}</td>
+                    <td>${escapeHtml(s.deviceId || "-")}</td>
+                    <td>${escapeHtml(s.canal || "-")}</td>
                     <td class="status ${s.estado === "ACTIVO" ? "active" : "inactive"}">${escapeHtml(s.estado)}</td>
                     <td>${formatDate(s.ultimaLectura)}</td>
                     <td id="sensor-row-${s.id}">${formatValue(s)} ${escapeHtml(s.unidad)}</td>
                 </tr>
-            `).join("") || `<tr><td colspan="5" class="empty">No hay sensores configurados.</td></tr>`}
+            `).join("") || `<tr><td colspan="7" class="empty">No hay sensores configurados.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -792,30 +1038,259 @@ function connectWebSocket() {
 }
 
 function updateSensorFromWebSocket(msg) {
-    const sensor = state.sensors.find(s => s.id === msg.sensorId);
-    if (!sensor) return;
 
-    sensor.valorActual = Number(msg.valor);
-    sensor.ultimaLectura = msg.fecha;
+    /*
+     * Primero intentamos localizar el sensor por ID.
+     */
+    let sensor = state.sensors.find(
+        s =>
+            String(s.id) ===
+            String(msg.sensorId)
+    );
 
-    if (!state.chartHistory[sensor.id]) state.chartHistory[sensor.id] = [];
-    state.chartHistory[sensor.id].push({value: sensor.valorActual, date: msg.fecha});
-    if (state.chartHistory[sensor.id].length > 24) state.chartHistory[sensor.id].shift();
+    /*
+     * Si no está por ID, intentamos localizarlo
+     * mediante deviceId + canal.
+     */
+    if (!sensor && msg.deviceId && msg.canal) {
 
-    const metricId = sensor.tipo.toLowerCase() === "temperatura" ? "metric-temp" :
-                     sensor.tipo.toLowerCase() === "humedad" ? "metric-hum" :
-                     sensor.tipo.toLowerCase() === "co₂" || sensor.tipo.toLowerCase() === "co2" ? "metric-co2" : null;
-    if (metricId) {
-        const el = document.getElementById(metricId);
-        if (el) el.textContent = `${formatValue(sensor)} ${sensor.unidad}`;
+        sensor = state.sensors.find(
+            s =>
+                String(s.deviceId) ===
+                    String(msg.deviceId)
+                &&
+                String(s.canal) ===
+                    String(msg.canal)
+        );
     }
 
-    const metric = document.getElementById(`sensor-metric-${sensor.id}`);
-    const row = document.getElementById(`sensor-row-${sensor.id}`);
-    if (metric) metric.textContent = `${formatValue(sensor)} ${sensor.unidad}`;
-    if (row) row.textContent = `${formatValue(sensor)} ${sensor.unidad}`;
+    /*
+     * SENSOR NUEVO
+     *
+     * Si el backend acaba de registrar un sensor
+     * porque el microcontrolador comenzó a transmitir,
+     * lo incorporamos inmediatamente al frontend.
+     */
+    if (!sensor && msg.sensorId) {
 
-    if (state.page === "dashboard") state.charts.forEach(drawChart);
+        sensor = {
+
+            id: msg.sensorId,
+
+            nombre:
+                `Sensor ${msg.tipo || msg.sensorId}`,
+
+            tipo:
+                msg.tipo || "Sensor",
+
+            unidad:
+                msg.unidad || "",
+
+            deviceId:
+                msg.deviceId || null,
+
+            canal:
+                msg.canal || null,
+
+            estado:
+                msg.estado || "ACTIVO",
+
+            valorActual:
+                Number(msg.valor || 0),
+
+            ultimaLectura:
+                msg.fecha || null
+        };
+
+        state.sensors.push(sensor);
+
+        /*
+         * Este sensor comienza a tener historial
+         * aunque todavía no tenga gráfico.
+         */
+        state.chartHistory[sensor.id] = [];
+    }
+
+    if (!sensor) {
+        return;
+    }
+
+    /*
+     * Actualizamos información del sensor.
+     */
+    if (msg.estado) {
+        sensor.estado = msg.estado;
+    }
+
+    if (
+        msg.valor !== undefined &&
+        msg.valor !== null
+    ) {
+        sensor.valorActual =
+            Number(msg.valor);
+    }
+
+    if (msg.fecha) {
+        sensor.ultimaLectura =
+            msg.fecha;
+    }
+
+    if (msg.deviceId) {
+        sensor.deviceId =
+            msg.deviceId;
+    }
+
+    if (msg.canal !== undefined) {
+        sensor.canal =
+            msg.canal;
+    }
+
+    /*
+     * Actualizar cualquier gráfico que esté
+     * asociado a este sensor.
+     *
+     * IMPORTANTE:
+     * aquí NO se crea ningún gráfico.
+     */
+    state.charts.forEach(g => {
+
+        if (
+            g.sensor &&
+            String(g.sensor.id) ===
+            String(sensor.id)
+        ) {
+            g.sensor = sensor;
+        }
+    });
+
+    /*
+     * Guardamos el historial de lecturas.
+     *
+     * Esto también ocurre cuando el sensor
+     * todavía no tiene gráfico.
+     */
+    if (
+        msg.valor !== undefined &&
+        msg.valor !== null
+    ) {
+
+        if (!state.chartHistory[sensor.id]) {
+
+            state.chartHistory[sensor.id] = [];
+        }
+
+        const history =
+            state.chartHistory[sensor.id];
+
+        const last =
+            history[history.length - 1];
+
+        if (
+            !last ||
+            last.date !== msg.fecha ||
+            Number(last.value) !==
+                Number(msg.valor)
+        ) {
+
+            history.push({
+
+                value:
+                    Number(msg.valor),
+
+                date:
+                    msg.fecha
+            });
+
+            if (history.length > 100) {
+                history.shift();
+            }
+        }
+    }
+
+    /*
+     * Tarjetas principales del dashboard.
+     */
+    const normalizedType =
+        normalizeSensorType(
+            sensor.tipo
+        );
+
+    const metricId =
+        normalizedType.includes("temperatura")
+            ? "metric-temp"
+
+        : (
+            normalizedType === "humedad" ||
+            normalizedType.includes(
+                "humedad relativa"
+            )
+        )
+            ? "metric-hum"
+
+        : normalizedType === "co2"
+            ? "metric-co2"
+
+        : null;
+
+    if (metricId) {
+
+        const el =
+            document.getElementById(
+                metricId
+            );
+
+        if (el) {
+
+            el.textContent =
+                `${formatValue(sensor)} ${sensor.unidad}`;
+        }
+    }
+
+    /*
+     * Actualización de la sección Sensores.
+     */
+    const metric =
+        document.getElementById(
+            `sensor-metric-${sensor.id}`
+        );
+
+    const row =
+        document.getElementById(
+            `sensor-row-${sensor.id}`
+        );
+
+    if (metric) {
+
+        metric.textContent =
+            `${formatValue(sensor)} ${sensor.unidad}`;
+    }
+
+    if (row) {
+
+        row.textContent =
+            `${formatValue(sensor)} ${sensor.unidad}`;
+    }
+
+    /*
+     * Si estamos viendo Sensores, renderizamos
+     * para que aparezca inmediatamente un sensor
+     * recién conectado.
+     */
+    if (state.page === "sensores") {
+
+        renderSensors();
+    }
+
+    /*
+     * Si estamos en Dashboard, solamente
+     * actualizamos los gráficos que YA EXISTEN.
+     */
+    else if (state.page === "dashboard") {
+
+        state.charts.forEach(
+            g => drawChart(g)
+        );
+    }
 }
 
 window.navigate = navigate;

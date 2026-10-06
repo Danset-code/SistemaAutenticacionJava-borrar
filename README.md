@@ -180,3 +180,9 @@ Cada actualización tiene una estructura similar a:
   "fecha": "2026-07-28T13:00:00"
 }
 ```
+
+## Vinculación automática de sensores físicos
+
+Los sensores se identifican por la combinación `deviceId + canal`. El microcontrolador no necesita conocer el `sensorId` ni el `graficoId` de MySQL. Al recibir una lectura mediante `POST /api/lecturas`, el backend busca el sensor por `deviceId` y `canal`; si no existe, lo crea usando `tipo` y `unidad`, crea un gráfico LINEAL si todavía no hay uno y publica el evento por WebSocket.
+
+Se permiten varios sensores del mismo tipo en un mismo microcontrolador siempre que utilicen canales diferentes, por ejemplo `ESP32-001 / 1` y `ESP32-001 / 2`.
