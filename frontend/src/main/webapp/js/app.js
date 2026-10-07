@@ -767,29 +767,6 @@ async function deleteChart(id) {
     } catch(e) { alert(e.message); }
 }
 
-function openSensorModal() {
-    const modal = document.getElementById("modal-container");
-    if (!modal) return;
-    const options = SENSOR_CATALOG.map(t =>
-        `<option value="${escapeHtml(t.id)}">${escapeHtml(t.nombre)} (${escapeHtml(t.unidad)})</option>`
-    ).join("");
-
-    modal.innerHTML = `
-      <div class="modal-backdrop">
-        <div class="modal">
-          <h2>Crear sensor</h2>
-          <form onsubmit="createSensor(event)">
-            <div class="form-row"><label>Tipo de sensor</label><select id="sensorTipoCatalogo" class="form-control" required>${options}</select></div>
-            <div class="form-row"><label>Nombre</label><input id="sensorNombre" class="form-control" placeholder="Ej. Sensor CO₂ 01" required></div>
-            <div class="form-row"><label>Device ID</label><input id="sensorDeviceId" class="form-control" placeholder="Ej. ESP32-001" required></div>
-            <div class="form-row"><label>Canal / sensor físico</label><input id="sensorCanal" class="form-control" placeholder="Ej. 1" required></div>
-            <div class="form-row"><label>Valor inicial</label><input id="sensorValor" class="form-control" type="number" step="0.1" value="0" required></div>
-            <div style="display:flex;gap:10px;justify-content:flex-end"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar sensor</button></div>
-          </form>
-        </div>
-      </div>`;
-}
-
 async function createSensor(event) {
     event.preventDefault();
     try {
@@ -827,7 +804,6 @@ function renderSensors() {
     main.innerHTML = `
       <div class="topbar">
         <h1>Sensores configurados</h1>
-        <button class="btn btn-primary" onclick="openSensorModal()">Agregar sensor</button>
       </div>
 
       <p class="muted" style="margin-bottom:20px;">
@@ -1301,7 +1277,6 @@ window.showForgotPassword = showForgotPassword;
 window.forgotPassword = forgotPassword;
 window.logout = logout;
 window.openChartModal = openChartModal;
-window.openSensorModal = openSensorModal;
 window.closeModal = closeModal;
 window.createChart = createChart;
 window.createSensor = createSensor;
