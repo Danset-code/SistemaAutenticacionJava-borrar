@@ -27,7 +27,7 @@ public class ExcelReportService {
             headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
             Row header = sheet.createRow(0);
-            String[] columns = {"ID", "Fecha", "Sensor", "Tipo", "Valor", "Unidad", "Estado"};
+            String[] columns = {"ID", "Fecha", "Sensor", "Tipo", "Valor", "Unidad"};
             for (int i = 0; i < columns.length; i++) {
                 Cell cell = header.createCell(i);
                 cell.setCellValue(columns[i]);
@@ -43,7 +43,6 @@ public class ExcelReportService {
                 row.createCell(3).setCellValue(lectura.getSensor().getTipo());
                 row.createCell(4).setCellValue(lectura.getValor() == null ? 0.0 : lectura.getValor());
                 row.createCell(5).setCellValue(lectura.getSensor().getUnidad());
-                row.createCell(6).setCellValue(lectura.getSensor().getEstado());
             }
 
             for (int i = 0; i < columns.length; i++) {
