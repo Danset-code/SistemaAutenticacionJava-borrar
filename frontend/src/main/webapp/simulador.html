@@ -130,13 +130,25 @@ async function request(path, options={}){
   const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
   if(!r.ok)throw new Error(data.message||`HTTP ${r.status}`);return data;
 }
-  async function loadTypes() { 
-    /* * Primero intentamos cargar los tipos * configurados en el backend. */ 
-    try {const backendTypes = await request('/tipos-sensores?activos=true'); 
-    /* * Si el backend tiene tipos, * los usamos. */ 
-    if (Array.isArray(backendTypes) && backendTypes.length > 0) {types = backendTypes;} 
-    else { /* * Si no hay tipos en backend, * utilizamos el catálogo completo. */ types = SENSOR_CATALOG.map(s => ({nombre: s.nombre, unidad: s.unidad}));} } catch { /* * Si el endpoint no existe, * falla o no responde, * usamos directamente el catálogo. */ types = SENSOR_CATALOG.map(s => ({nombre: s.nombre, unidad: s.unidad}));} $('sensorType').innerHTML = types.map(t => ` <option value="${esc(t.nombre)}" data-unit="${esc(t.unidad)}" > ${esc(t.nombre)} (${esc(t.unidad)}) </option> `).join(''); 
-  updateUnit();}
+  async function loadTypes() {
+    types = SENSOR_CATALOG.map(s => ({
+        id: s.id,
+        nombre: s.nombre,
+        unidad: s.unidad
+    }));
+
+    $('sensorType').innerHTML = types
+        .map(t => `
+            <option
+                value="${esc(t.nombre)}"
+                data-unit="${esc(t.unidad)}">
+                ${esc(t.nombre)} (${esc(t.unidad)})
+            </option>
+        `)
+        .join('');
+
+    updateUnit();
+}
 function updateUnit(){const o=$('sensorType').selectedOptions[0];if(o)$('sensorUnit').value=o.dataset.unit||'';}
 async function loadSensors(){
   try{
