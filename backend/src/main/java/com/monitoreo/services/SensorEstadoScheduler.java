@@ -28,17 +28,53 @@ public class SensorEstadoScheduler {
     @Scheduled(fixedRate = 1000)
     @Transactional
     public void verificarEstados() {
+    
         LocalDateTime ahora = LocalDateTime.now();
+    
         List<Sensor> sensores = sensorRepository.findAll();
-
+    
         for (Sensor sensor : sensores) {
-            boolean activo = sensor.getUltimaLectura() != null
-                    && Duration.between(sensor.getUltimaLectura(), ahora).getSeconds() <= TIMEOUT_SECONDS;
-            String nuevoEstado = activo ? "ACTIVO" : "INACTIVO";
-
+    
+            if (sensor.getUltimaLectura() == null) {
+                System.out.println(
+                    "[ESTADO] Sensor " + sensor.getId() +
+                    " sin ultimaLectura"
+                );
+                continue;
+            }
+    
+            long segundos = Duration.between(
+                    sensor.getUltimaLectura(),
+                    ahora
+            ).getSeconds();
+    
+            System.out.println(
+                "[ESTADO] Sensor=" + sensor.getId() +
+                " | ultimaLectura=" + sensor.getUltimaLectura() +
+                " | ahora=" + ahora +
+                " | segundos=" + segundos +
+                " | estado=" + sensor.getEstado()
+            );
+    
+            boolean activo = segundos <= TIMEOUT_SECONDS;
+    
+            String nuevoEstado = activo
+                    ? "ACTIVO"
+                    : "INACTIVO";
+    
             if (!nuevoEstado.equalsIgnoreCase(sensor.getEstado())) {
+    
                 sensor.setEstado(nuevoEstado);
+    
                 sensorRepository.save(sensor);
+    
+                System.out.println(
+                    "[ESTADO CAMBIO] Sensor " +
+                    sensor.getId() +
+                    " -> " +
+                    nuevoEstado
+                );
+    
                 broadcastEstado(sensor);
             }
         }
