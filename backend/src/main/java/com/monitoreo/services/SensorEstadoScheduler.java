@@ -50,12 +50,13 @@ public class SensorEstadoScheduler {
         payload.put("event", "ESTADO_SENSOR");
         payload.put("sensorId", sensor.getId());
         payload.put("deviceId", sensor.getDeviceId());
+        payload.put("deviceAlias", sensor.getDeviceAlias());
         payload.put("canal", sensor.getCanal());
         payload.put("tipo", sensor.getTipo());
         payload.put("unidad", sensor.getUnidad());
         payload.put("estado", sensor.getEstado());
         payload.put("valor", sensor.getValorActual());
         payload.put("fecha", sensor.getUltimaLectura());
-        webSocketHandler.broadcast(payload);
+        if (sensor.getUsuario() != null) webSocketHandler.broadcast(payload, sensor.getUsuario().getId());
     }
 }

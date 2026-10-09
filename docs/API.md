@@ -1,34 +1,22 @@
-# Documentación API REST - Sistema de Monitoreo
+# API REST - Sistema de Monitoreo de Cultivo Medicinal
 
-Base URL:
+## Direcciones base
 
-`http://localhost:8080`
+Desarrollo local: `http://localhost:8080`
 
-## 1. Autenticación
+## 1. Autenticación y sesiones
 
-### POST /api/auth/register
-
-Registra un usuario.
-
-Body:
+### `POST /api/auth/register`
 
 ```json
 {
-  "nombre": "Daniel",
-  "correo": "daniel@example.com",
-  "password": "123456"
+  "nombre": "Usuario de prueba",
+  "correo": "usuario@example.com",
+  "password": "ClaveSegura123"
 }
 ```
 
-Respuestas:
-- `201 Created`: registro exitoso.
-- `400 Bad Request`: datos inválidos o correo existente.
-
-### POST /api/auth/login
-
-Valida las credenciales.
-
-Body:
+### `POST /api/auth/login`
 
 ```json
 {
@@ -37,165 +25,172 @@ Body:
 }
 ```
 
-Respuestas:
-- `200 OK`: credenciales válidas.
-- `401 Unauthorized`: credenciales incorrectas.
-- `400 Bad Request`: datos inválidos.
+La respuesta de inicio de sesión incluye `accessToken`. Para acceder a sensores, gráficos, lecturas, reportes y dispositivos desde Postman o desde otra herramienta, agrega este encabezado:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+El token se guarda en una tabla de sesiones del backend y expira en ocho horas. La interfaz web no lo almacena en `localStorage` ni en `sessionStorage`: al recargar la URL debe pedir autenticación nuevamente.
+
+### `POST /api/auth/logout`
+
+Invalida la sesión actual. Envía el token anterior en `Authorization`.
 
 ## 2. Sensores
 
-Recurso: `/api/sensores`
+Todas las rutas de este módulo requieren autenticación y filtran por la cuenta asociada a la sesión.
 
 | Método | Endpoint | Función |
 |---|---|---|
-| GET | `/api/sensores` | Lista sensores |
-| GET | `/api/sensores/{id}` | Consulta un sensor |
-| POST | `/api/sensores` | Crea sensor |
-| PUT | `/api/sensores/{id}` | Actualiza sensor |
-| PATCH | `/api/sensores/{id}/estado` | Cambia estado |
-| DELETE | `/api/sensores/{id}` | Elimina sensor |
+| GET | `/api/sensores` | Lista los sensores del usuario |
+| GET | `/api/sensores/{id}` | Consulta un sensor propio |
+| POST | `/api/sensores` | Crea un sensor para el usuario |
+| PUT | `/api/sensores/{id}` | Actualiza un sensor propio |
+| DELETE | `/api/sensores/{id}` | Elimina el sensor y sus lecturas/gráficos asociados |
 
-POST/PUT:
+Ejemplo de cuerpo para `POST /api/sensores`:
 
 ```json
 {
-  "nombre": "Temperatura",
-  "tipo": "Temperatura",
+  "nombre": "Temperatura de hoja",
+  "tipo": "Temperatura de hoja",
   "unidad": "°C",
-  "estado": "ACTIVO"
+  "valorActual": 0
 }
 ```
 
-## 3. Gráficos
+Para asociar un sensor con una placa vinculada se utilizan `deviceId` (ID de hardware registrado) y `canal`; en la interfaz se selecciona el alias automático y no se escribe el ID manualmente.
 
-Recurso: `/api/graficos`
+## 3. Gráficos
 
 | Método | Endpoint | Función |
 |---|---|---|
-| GET | `/api/graficos` | Lista gráficos |
-| GET | `/api/graficos/{id}` | Consulta gráfico |
-| POST | `/api/graficos` | Crea gráfico |
-| PUT | `/api/graficos/{id}` | Actualiza gráfico |
-| PATCH | `/api/graficos/{id}/activo` | Activa/desactiva |
-| DELETE | `/api/graficos/{id}` | Elimina gráfico |
+| GET | `/api/graficos` | Lista gráficos del usuario |
+| GET | `/api/graficos/{id}` | Consulta un gráfico propio |
+| POST | `/api/graficos` | Crea un gráfico sobre un sensor propio |
+| PUT | `/api/graficos/{id}` | Actualiza un gráfico propio |
+| PATCH | `/api/graficos/{id}/activo?activo=true` | Activa/desactiva un gráfico propio |
+| DELETE | `/api/graficos/{id}` | Elimina un gráfico propio |
 
-POST:
+Ejemplo de `POST /api/graficos`:
 
 ```json
 {
-  "nombre": "Temperatura ambiente",
+  "nombre": "Temperatura de hoja",
   "tipo": "LINEAL",
   "sensorId": 1,
   "activo": true
 }
 ```
 
-Tipos admitidos por el frontend:
-- LINEAL
-- BARRAS
-- AREA
+Tipos visuales usados por el frontend: `LINEAL`, `BARRAS` y `AREA`.
 
 ## 4. Lecturas
 
-Recurso: `/api/lecturas`
-
 | Método | Endpoint | Función |
 |---|---|---|
-| GET | `/api/lecturas` | Lista lecturas |
-| GET | `/api/lecturas/{id}` | Consulta lectura |
-| GET | `/api/lecturas/sensor/{sensorId}` | Lecturas de un sensor |
-| POST | `/api/lecturas` | Registra lectura |
-| DELETE | `/api/lecturas/{id}` | Elimina lectura |
+| GET | `/api/lecturas` | Lista lecturas del usuario |
+| GET | `/api/lecturas/{id}` | Consulta una lectura propia |
+| GET | `/api/lecturas/sensor/{sensorId}` | Lista lecturas de un sensor propio |
+| POST | `/api/lecturas` | Registra una lectura propia o autenticada con clave de dispositivo |
+| DELETE | `/api/lecturas/{id}` | Elimina una lectura propia |
 
-POST:
+Un navegador o Postman con sesión puede enviar una lectura asociada a un sensor propio:
 
 ```json
 {
   "sensorId": 1,
   "valor": 25.8,
-  "fecha": "2026-07-28T13:30:00"
+  "fecha": "2026-10-08T13:30:00"
 }
 ```
 
-## 5. Reportes
+Debe incluir el encabezado `Authorization: Bearer <accessToken>`.
 
-### GET /api/reportes
+## 5. Dispositivos físicos: nombres automáticos
 
-Consulta lecturas para reportes.
+Las rutas de consulta y generación de códigos requieren una sesión de usuario:
 
-Ejemplos:
-
-`GET /api/reportes`
-
-`GET /api/reportes?sensorId=1`
-
-`GET /api/reportes?desde=2026-07-01&hasta=2026-07-28`
-
-## 6. WebSocket
-
-Endpoint:
-
-`ws://localhost:8080/ws/sensores`
-
-El servidor transmite una lectura nueva cada 5 segundos para cada sensor ficticio.
-
-El mensaje contiene:
-
-```json
-{
-  "tipo": "lectura",
-  "sensorId": 1,
-  "sensor": "Temperatura",
-  "valor": 26.3,
-  "unidad": "°C",
-  "fecha": "2026-07-28T13:30:00"
-}
-```
-
-## Códigos HTTP
-
-- `200 OK`: consulta/actualización exitosa.
-- `201 Created`: recurso creado.
-- `204 No Content`: eliminación exitosa.
-- `400 Bad Request`: datos inválidos.
-- `401 Unauthorized`: credenciales incorrectas.
-- `404 Not Found`: recurso no encontrado.
-- `409 Conflict`: conflicto, por ejemplo correo duplicado.
-- `500 Internal Server Error`: error no controlado.
-
-## 6. Catálogo de tipos de sensores
-
-Recurso: `/api/tipos-sensores`
-
-| Método | Ruta | Descripción |
+| Método | Endpoint | Función |
 |---|---|---|
-| GET | `/api/tipos-sensores` | Lista tipos activos |
-| GET | `/api/tipos-sensores?activos=false` | Lista todos los tipos |
-| GET | `/api/tipos-sensores/{id}` | Consulta un tipo |
-| POST | `/api/tipos-sensores` | Agrega un tipo al catálogo |
-| PUT | `/api/tipos-sensores/{id}` | Actualiza nombre, unidad y cantidad disponible |
-| PATCH | `/api/tipos-sensores/{id}/activo?activo=true|false` | Activa/desactiva un tipo |
-| DELETE | `/api/tipos-sensores/{id}` | Elimina un tipo del catálogo |
+| GET | `/api/dispositivos` | Lista los dispositivos de la cuenta |
+| POST | `/api/dispositivos/codigo-vinculacion` | Reserva un alias y genera un código de un solo uso |
+| POST | `/api/dispositivos/vincular` | Canjea el código desde el microcontrolador (ruta pública, autorizada por el código) |
 
-El catálogo es independiente de los sensores físicos creados. Por eso eliminar un sensor o un gráfico no elimina su tipo del catálogo.
+El backend asigna nombres visibles (`device1`, `device2`, etc.). El firmware obtiene el `hardwareId` estable por sí mismo; no debe enviar el alias como identidad física.
 
-## 7. Exportación Excel
+Primera vinculación:
 
-`GET /api/reportes/exportar` genera un archivo **XLSX real** utilizando Apache POI. Acepta los mismos filtros opcionales del reporte (`sensorId`, `desde`, `hasta`) y responde con `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` y `Content-Disposition: attachment`.
-
-## Vinculación física de sensores
-
-Las lecturas pueden enviarse utilizando `deviceId` y `canal` en lugar de `sensorId`:
+`POST /api/dispositivos/vincular`
 
 ```json
 {
-  "deviceId": "ESP32-001",
-  "canal": "1",
-  "tipo": "CO2",
-  "unidad": "ppm",
-  "valor": 450.0,
-  "fecha": "2026-09-10T18:30:00"
+  "hardwareId": "IDENTIFICADOR_UNICO_LEIDO_POR_EL_FIRMWARE",
+  "pairingCode": "CODIGO_DE_UN_SOLO_USO"
 }
 ```
 
-La combinación `deviceId + canal` identifica de forma única un sensor físico dentro del sistema y permite tener varios sensores del mismo tipo en el mismo microcontrolador.
+La respuesta devuelve `deviceKey`; guárdalo de forma privada en el dispositivo. El código se consume en la primera vinculación.
+
+## 6. Lecturas enviadas por una placa
+
+Una placa vinculada envía `POST /api/lecturas` con este encabezado:
+
+```text
+X-Device-Key: <deviceKey>
+Content-Type: application/json
+```
+
+Y un cuerpo como:
+
+```json
+{
+  "deviceId": "IDENTIFICADOR_UNICO_LEIDO_POR_EL_FIRMWARE",
+  "canal": "1",
+  "tipo": "Temperatura del aire",
+  "unidad": "°C",
+  "valor": 26.8,
+  "fecha": "2026-10-08T20:30:00"
+}
+```
+
+Se utiliza la combinación `deviceId + canal` para encontrar el sensor. Una placa puede tener varios canales, incluso de un mismo tipo, conservando el mismo `deviceId` y usando un `canal` distinto. Si un canal aún no está registrado, el backend puede crear su sensor durante la primera lectura cuando se envían `tipo` y `unidad`.
+
+Consulta [`DEVICE_LINKING.md`](DEVICE_LINKING.md) para consejos de obtención del identificador según ESP32, Raspberry Pi y Arduino.
+
+## 7. Reportes y exportación
+
+Las dos rutas requieren sesión y solo muestran lecturas de la cuenta autenticada:
+
+- `GET /api/reportes`
+- `GET /api/reportes/exportar`
+
+Parámetros opcionales: `sensorId`, `desde=yyyy-MM-dd`, `hasta=yyyy-MM-dd`. La exportación genera un archivo XLSX real.
+
+## 8. WebSocket
+
+El navegador se conecta con el token de sesión:
+
+`ws://localhost:8080/ws/sensores?token=<accessToken>`
+
+El servidor publica cada lectura y cambio de estado únicamente a las sesiones WebSocket del propietario del sensor.
+
+## 9. Catálogo de tipos de sensores
+
+El catálogo de tipos/unidades es común para todas las cuentas; no contiene sensores instalados, gráficos ni lecturas. La interfaz principal utiliza un catálogo de variables integrado en el frontend.
+
+- `GET /api/tipos-sensores`
+- `GET /api/tipos-sensores?activos=false`
+- `POST /api/tipos-sensores`
+- `PUT /api/tipos-sensores/{id}`
+- `PATCH /api/tipos-sensores/{id}/activo?activo=true|false`
+- `DELETE /api/tipos-sensores/{id}`
+
+## 10. Prueba de aislamiento recomendada
+
+1. Inicia sesión como administrador y confirma que se muestran sus datos históricos.
+2. Registra un usuario nuevo, inicia sesión y confirma que el dashboard está vacío.
+3. Crea un sensor y un gráfico con el segundo usuario y registra una lectura.
+4. Entra de nuevo como administrador. Los nuevos datos del segundo usuario no deben aparecer en su dashboard, lista de sensores, reportes ni WebSocket.
+5. Intenta consultar el ID de un sensor de otra cuenta con el token del segundo usuario. La API debe rechazar la consulta o responder que el recurso no existe en su cuenta.

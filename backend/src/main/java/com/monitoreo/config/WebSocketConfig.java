@@ -9,16 +9,18 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
-
     private final SensorWebSocketHandler handler;
+    private final UsuarioWebSocketHandshakeInterceptor handshakeInterceptor;
 
-    public WebSocketConfig(SensorWebSocketHandler handler) {
+    public WebSocketConfig(SensorWebSocketHandler handler, UsuarioWebSocketHandshakeInterceptor handshakeInterceptor) {
         this.handler = handler;
+        this.handshakeInterceptor = handshakeInterceptor;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(handler, "/ws/sensores")
+                .addInterceptors(handshakeInterceptor)
                 .setAllowedOrigins(
                         "http://localhost:8081",
                         "http://127.0.0.1:8081",

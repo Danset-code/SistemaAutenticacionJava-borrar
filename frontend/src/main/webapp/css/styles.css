@@ -117,3 +117,12 @@ td { padding:16px; border-bottom:1px solid #e4e7eb; }
     .main { margin-left:0; width:100%; padding:20px; }
     .brand { height:60px; }
 }
+
+/* Perfil de usuario y acciones de borrado */
+.profile-modal { width: min(560px, 94vw); }
+.profile-modal .btn-danger { margin-right: auto; }
+@media(max-width:650px) {
+    .profile-modal > form > div:last-child { justify-content: stretch !important; }
+    .profile-modal > form > div:last-child .btn { width: 100%; }
+    .profile-modal .btn-danger { margin-right: 0; }
+}

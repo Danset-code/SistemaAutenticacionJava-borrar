@@ -1,23 +1,23 @@
 # Sistema de Monitoreo de Cultivo Medicinal
 
-Proyecto formativo para visualización de datos ambientales de un cultivo medicinal.
+Proyecto formativo para visualizar y administrar datos ambientales de un cultivo medicinal mediante una aplicación web, API REST, MySQL y WebSocket.
 
 ## Arquitectura
 
-- **Backend:** Java 21 + Spring Boot 3.5 + Spring Data JPA + MySQL.
-- **Frontend:** Maven Web Application (WAR) con HTML5, CSS y JavaScript, desplegable en Apache Tomcat desde NetBeans.
-- **Comunicación en tiempo real:** WebSocket nativo en `/ws/sensores`.
-- **API REST:** endpoints `/api/...`.
-- **Datos ficticios:** el backend crea sensores, gráficos y lecturas iniciales y genera nuevas lecturas automáticamente cada 5 segundos.
+- **Backend:** Java 17, Spring Boot 3.5.0, Spring Data JPA, MySQL y WebSocket.
+- **Frontend:** HTML5, CSS y JavaScript, empaquetado como WAR para Apache Tomcat desde NetBeans.
+- **Autenticación:** sesión de servidor identificada mediante `Authorization: Bearer <accessToken>`.
+- **Datos por cuenta:** sensores, gráficos, lecturas, reportes y eventos WebSocket quedan filtrados por el usuario autenticado.
+- **Tipos de sensor:** el listado de variables y unidades es un catálogo común. Los sensores físicos y sus lecturas no son compartidos.
 
-## Puertos recomendados
-
-Para evitar el conflicto que ocurre cuando Tomcat y Spring Boot intentan utilizar 8080:
+## Puertos de desarrollo
 
 - Backend Spring Boot: `http://localhost:8080`
 - Frontend Tomcat: `http://localhost:8081/monitoreo/`
+- API: `http://localhost:8080/api`
+- WebSocket: `ws://localhost:8080/ws/sensores?token=<accessToken>`
 
-En NetBeans configura Tomcat para utilizar el puerto HTTP `8081`.
+Configura Tomcat en el puerto HTTP `8081` para evitar conflictos con Spring Boot.
 
 ## Base de datos
 
@@ -27,162 +27,95 @@ Crear en MySQL:
 CREATE DATABASE monitoreo_cultivo CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Luego modificar `backend/src/main/resources/application.properties`:
+Configura las variables de entorno `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` según tu entorno. El archivo `backend/src/main/resources/application.properties` conserva la configuración local del proyecto; antes de publicar el sistema, no dejes credenciales de la base de datos escritas en el repositorio.
 
-```properties
-spring.datasource.username=root
-spring.datasource.password=TU_PASSWORD
-```
+Hibernate utiliza `ddl-auto=update` para añadir las tablas y columnas del modelo actualizado. **Antes de iniciar por primera vez con una base existente, haz una copia de seguridad.** El inicializador asigna los sensores históricos que no tengan propietario al administrador para no perder sus datos; los usuarios nuevos empiezan sin sensores, gráficos ni lecturas.
 
-El backend crea las tablas automáticamente con JPA.
+## Ejecutar en NetBeans
 
-## Ejecutar backend
+### Backend
 
-Desde NetBeans:
 1. Abrir la carpeta `backend` como proyecto Maven.
-2. Ejecutar `Main.java` o `spring-boot:run`.
-3. Verificar que Spring Boot escuche en `http://localhost:8080`.
+2. Verificar que esté seleccionada una JDK compatible con Java 17.
+3. Ejecutar `Main.java` o `spring-boot:run`.
+4. Revisar la consola y confirmar que Spring Boot termina de iniciar correctamente.
 
-## Ejecutar frontend
+### Frontend
 
-Desde NetBeans:
 1. Abrir `frontend` como proyecto Maven Web Application.
-2. Registrar/configurar Apache Tomcat.
-3. Usar el puerto `8081`.
-4. Ejecutar el proyecto.
-5. Abrir `http://localhost:8081/monitoreo/`.
+2. Registrar/configurar Apache Tomcat con puerto HTTP `8081`.
+3. Ejecutar el proyecto.
+4. Abrir `http://localhost:8081/monitoreo/`.
+5. Cada nueva carga de la URL comienza en el inicio de sesión; el token se conserva únicamente en memoria del navegador.
 
-## Usuario de prueba
+## Cuenta administradora de desarrollo
 
-El inicializador crea:
+El inicializador crea la cuenta de desarrollo si todavía no existe:
 
 - Correo: `admin@monitoreo.com`
-- Contraseña: `Admin123`
+- Contraseña inicial: `Admin123`
 
-También se puede registrar un usuario desde la pantalla de acceso.
+Cambia las credenciales de desarrollo antes de utilizarlo fuera del entorno local. El proyecto también permite registrar usuarios desde la pantalla de acceso.
 
-## Funcionalidades
+## Aislamiento por usuario
 
-### Dashboard
-- Tarjetas con temperatura, humedad y CO₂.
-- Gráficos configurables.
-- Crear gráficos.
-- Eliminar gráficos.
-- Actualización de lecturas en tiempo real mediante WebSocket.
+Los endpoints privados requieren el encabezado `Authorization: Bearer <accessToken>`. El token se obtiene de `POST /api/auth/login`; la respuesta contiene `accessToken`. Al cerrar sesión se invalida el token en el backend. Si recargas la URL, debes iniciar sesión de nuevo.
 
-### Catálogo de sensores
-- Catálogo independiente de los sensores físicos actualmente creados.
-- Alta de nuevos tipos de sensor con unidad y cantidad disponible.
-- Activación/desactivación y ajuste de cantidad.
-- El catálogo no desaparece cuando se elimina un sensor.
+Los endpoints de sensores, gráficos, lecturas, reportes y dispositivos solo devuelven o modifican los datos del propietario autenticado. Los mensajes WebSocket se envían únicamente a sesiones de la cuenta dueña del sensor.
 
-### Sensores
-- Lista de sensores.
-- Estado.
-- Última lectura.
-- Valor actual.
-- CRUD básico de sensores desde API REST.
+## Dispositivos y canales
 
-### Reportes
-- Consulta de lecturas.
-- Filtro por texto.
-- Filtro por sensor.
-- Exportación de los resultados a un archivo XLSX compatible con Microsoft Excel.
+El backend asigna automáticamente alias legibles `device1`, `device2`, etc. El firmware no debe enviar ese alias como identidad física: debe enviar un identificador estable y único (`deviceId`). El alias es una etiqueta que genera la aplicación y muestra al usuario.
+
+Para vincular un dispositivo por primera vez, inicia sesión, abre **Dispositivos** y genera un código de vinculación. El firmware intercambia una sola vez ese código y el ID real del hardware por una clave privada `deviceKey`. En los envíos posteriores debe utilizar `X-Device-Key` y mandar `deviceId`, `canal`, `tipo`, `unidad`, `valor` y opcionalmente `fecha` en el cuerpo JSON.
+
+Guía completa, ejemplos de petición y recomendaciones por hardware: [`docs/DEVICE_LINKING.md`](docs/DEVICE_LINKING.md).
+
+Ejemplo de lectura del dispositivo ya vinculado:
+
+```json
+{
+  "deviceId": "IDENTIFICADOR_UNICO_DE_HARDWARE",
+  "canal": "1",
+  "tipo": "Temperatura del aire",
+  "unidad": "°C",
+  "valor": 26.8,
+  "fecha": "2026-10-08T20:30:00"
+}
+```
+
+Endpoint local: `POST http://localhost:8080/api/lecturas`.
+
+Encabezado: `X-Device-Key: <deviceKey>`.
+
+Un equipo puede reportar varios canales usando el mismo `deviceId` y distinto `canal`. Si el canal aún no tiene sensor, la primera lectura debe incluir `tipo` y `unidad` para permitir su creación automática. En producción utiliza HTTPS para proteger la clave del dispositivo.
 
 ## Endpoints principales
 
 ### Autenticación
 
-`POST /api/auth/register`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/usuarios/{id}`
+- `PUT /api/auth/usuarios/{id}`
+- `DELETE /api/auth/usuarios/{id}`
 
-```json
-{
-  "nombre": "Daniel",
-  "correo": "daniel@example.com",
-  "password": "123456"
-}
-```
+### Sensores, gráficos, lecturas y reportes
 
-`POST /api/auth/login`
+- Sensores: `GET/POST /api/sensores`, `GET/PUT/DELETE /api/sensores/{id}`
+- Gráficos: `GET/POST /api/graficos`, `GET/PUT/DELETE /api/graficos/{id}`
+- Lecturas: `GET/POST /api/lecturas`, `GET/DELETE /api/lecturas/{id}`
+- Reportes: `GET /api/reportes`, `GET /api/reportes/exportar`
+- Dispositivos: `GET /api/dispositivos`, `POST /api/dispositivos/codigo-vinculacion`, `POST /api/dispositivos/vincular`
+- Catálogo compartido de tipos de sensores: `GET /api/tipos-sensores`
 
-```json
-{
-  "correo": "admin@monitoreo.com",
-  "password": "Admin123"
-}
-```
+Las operaciones privadas desde Postman también deben incluir `Authorization: Bearer <accessToken>`; para probarlo, primero inicia sesión con `POST /api/auth/login` y copia el `accessToken` devuelto.
 
-### Catálogo de sensores
-- Catálogo independiente de los sensores físicos actualmente creados.
-- Alta de nuevos tipos de sensor con unidad y cantidad disponible.
-- Activación/desactivación y ajuste de cantidad.
-- El catálogo no desaparece cuando se elimina un sensor.
+## Prueba básica de aislamiento
 
-### Sensores
-
-- `GET /api/sensores`
-- `GET /api/sensores/{id}`
-- `POST /api/sensores`
-- `PUT /api/sensores/{id}`
-- `PATCH /api/sensores/{id}/estado`
-- `DELETE /api/sensores/{id}`
-
-### Catálogo de tipos de sensores
-- `GET /api/tipos-sensores`
-- `GET /api/tipos-sensores?activos=false`
-- `POST /api/tipos-sensores`
-- `PUT /api/tipos-sensores/{id}`
-- `PATCH /api/tipos-sensores/{id}/activo`
-- `DELETE /api/tipos-sensores/{id}`
-
-### Gráficos
-
-- `GET /api/graficos`
-- `GET /api/graficos/{id}`
-- `POST /api/graficos`
-- `PUT /api/graficos/{id}`
-- `PATCH /api/graficos/{id}/activo`
-- `DELETE /api/graficos/{id}`
-
-### Lecturas
-
-- `GET /api/lecturas`
-- `GET /api/lecturas/{id}`
-- `GET /api/lecturas/sensor/{sensorId}`
-- `POST /api/lecturas`
-- `DELETE /api/lecturas/{id}`
-
-### Reportes
-
-`GET /api/reportes`
-
-Parámetros opcionales:
-
-- `sensorId`
-- `desde` en formato `yyyy-MM-dd`
-- `hasta` en formato `yyyy-MM-dd`
-
-## WebSocket
-
-El frontend se conecta a:
-
-`ws://localhost:8080/ws/sensores`
-
-Cada actualización tiene una estructura similar a:
-
-```json
-{
-  "tipo": "lectura",
-  "sensorId": 1,
-  "sensor": "Temperatura",
-  "valor": 26.4,
-  "unidad": "°C",
-  "fecha": "2026-07-28T13:00:00"
-}
-```
-
-## Vinculación automática de sensores físicos
-
-Los sensores se identifican por la combinación `deviceId + canal`. El microcontrolador no necesita conocer el `sensorId` ni el `graficoId` de MySQL. Al recibir una lectura mediante `POST /api/lecturas`, el backend busca el sensor por `deviceId` y `canal`; si no existe, lo crea usando `tipo` y `unidad`, crea un gráfico LINEAL si todavía no hay uno y publica el evento por WebSocket.
-
-Se permiten varios sensores del mismo tipo en un mismo microcontrolador siempre que utilicen canales diferentes, por ejemplo `ESP32-001 / 1` y `ESP32-001 / 2`.
+1. Inicia sesión con el administrador y verifica los registros históricos.
+2. Registra una cuenta nueva e inicia sesión con ella; el dashboard debe comenzar vacío.
+3. Crea un dispositivo, sensor, gráfico y lectura con la segunda cuenta.
+4. Cierra sesión y entra como administrador. Los datos creados por la segunda cuenta no deben aparecer en sensores, dashboard, reportes ni mensajes WebSocket.
+5. Recarga la URL en una sesión activa. Debe solicitar de nuevo las credenciales.

@@ -46,7 +46,7 @@ public class SensorWebSocketHandler extends TextWebSocketHandler {
         );
     }
 
-    public void broadcast(Object payload) {
+    public void broadcast(Object payload, Long ownerId) {
 
         try {
 
@@ -58,7 +58,8 @@ public class SensorWebSocketHandler extends TextWebSocketHandler {
 
             for (WebSocketSession session : sessions) {
 
-                if (session.isOpen()) {
+                Object sessionOwner = session.getAttributes().get("usuarioId");
+                if (session.isOpen() && ownerId != null && ownerId.equals(sessionOwner)) {
 
                     try {
 

@@ -1,5 +1,6 @@
 package com.monitoreo.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -27,6 +28,9 @@ public class Sensor {
     @Column(name = "device_id", length = 80)
     private String deviceId;
 
+    @Column(name = "device_alias", length = 30)
+    private String deviceAlias;
+
     @Column(length = 50)
     private String canal;
 
@@ -35,15 +39,14 @@ public class Sensor {
 
     private LocalDateTime ultimaLectura;
 
-    public Sensor() {}
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "usuario_id")
+    private Usuario usuario;
 
+    public Sensor() {}
     public Sensor(String nombre, String tipo, String unidad, String estado, Double valorActual) {
-        this.nombre = nombre;
-        this.tipo = tipo;
-        this.unidad = unidad;
-        this.estado = estado;
-        this.valorActual = valorActual;
-        this.ultimaLectura = null;
+        this.nombre = nombre; this.tipo = tipo; this.unidad = unidad;
+        this.estado = estado; this.valorActual = valorActual; this.ultimaLectura = null;
     }
 
     public Long getId() { return id; }
@@ -54,7 +57,9 @@ public class Sensor {
     public Double getValorActual() { return valorActual; }
     public LocalDateTime getUltimaLectura() { return ultimaLectura; }
     public String getDeviceId() { return deviceId; }
+    public String getDeviceAlias() { return deviceAlias; }
     public String getCanal() { return canal; }
+    @JsonIgnore public Usuario getUsuario() { return usuario; }
 
     public void setId(Long id) { this.id = id; }
     public void setNombre(String nombre) { this.nombre = nombre; }
@@ -64,5 +69,7 @@ public class Sensor {
     public void setValorActual(Double valorActual) { this.valorActual = valorActual; }
     public void setUltimaLectura(LocalDateTime ultimaLectura) { this.ultimaLectura = ultimaLectura; }
     public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    public void setDeviceAlias(String deviceAlias) { this.deviceAlias = deviceAlias; }
     public void setCanal(String canal) { this.canal = canal; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 }

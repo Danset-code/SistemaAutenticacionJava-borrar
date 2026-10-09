@@ -48,6 +48,13 @@ public class PasswordResetService {
                                 "No existe un usuario con ese correo"
                         )
                 );
+        
+        if ("admin@monitoreo.com".equalsIgnoreCase(usuario.getCorreo())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "El administrador no puede recuperar ni modificar su contraseña"
+            );
+        };
 
         // Eliminar tokens anteriores del usuario
         tokenRepository.deleteByUsuario(usuario);
@@ -118,6 +125,13 @@ public class PasswordResetService {
                 validarToken(token);
 
         Usuario usuario = resetToken.getUsuario();
+        
+        if ("admin@monitoreo.com".equalsIgnoreCase(usuario.getCorreo())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "La contraseña del administrador no puede modificarse"
+            );
+        }
 
         // Guardar la nueva contraseña utilizando BCrypt
         usuario.setPassword(

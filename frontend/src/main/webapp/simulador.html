@@ -22,6 +22,10 @@ header h1{margin:0;font-size:22px}header small{color:var(--muted)}
 <div class="wrap">
   <div class="grid">
     <section class="panel">
+      <h2>Sesión de prueba</h2>
+      <div class="field"><label>Correo</label><input id="simEmail" type="email" placeholder="Correo registrado"></div>
+      <div class="field"><label>Contraseña</label><input id="simPassword" type="password" placeholder="Contraseña"></div>
+      <div class="toolbar"><button class="primary" id="loginBtn">Iniciar sesión en el simulador</button><span id="loginStatus" class="hint">Debes autenticarte para acceder a los datos de tu cuenta.</span></div>
       <h2>Configuración</h2>
       <div class="field"><label>API del backend</label><input id="apiUrl" value="https://backend-sistemaautenticacionjava-borrar.onrender.com/api"></div>
       <div class="field"><label>WebSocket</label><input id="wsUrl" value="wss://backend-sistemaautenticacionjava-borrar.onrender.com/ws/sensores"></div>
@@ -35,10 +39,12 @@ header h1{margin:0;font-size:22px}header small{color:var(--muted)}
         <button class="secondary" id="refreshBtn">Actualizar sensores</button>
       </div>
 
-      <h2 style="margin-top:22px">Crear sensor</h2>
-      <div class="field"><label>Nombre</label><input id="sensorName" placeholder="Ej. Temperatura Invernadero 01"></div>
-      <div class="row"><div class="field"><label>Device ID</label><input id="deviceId" placeholder="Ej. ESP32-001"></div><div class="field"><label>Canal</label><input id="channel" placeholder="Ej. 1"></div></div>
-      <div class="field"><label>Tipo</label><select id="sensorType"></select></div>
+      <h2 style="margin-top:22px">Dispositivo y sensor</h2>
+      <p class="hint">El simulador genera automáticamente un identificador de hardware y lo vincula como device1, device2… No tienes que escribir un Device ID.</p>
+      <div class="toolbar"><button class="secondary" id="pairDeviceBtn">Crear/vincular dispositivo simulado</button></div>
+      <div class="field"><label>Dispositivo</label><select id="deviceSelect" required><option value="">Inicia sesión y vincula un dispositivo</option></select></div>
+      <div class="field"><label>Nombre del sensor</label><input id="sensorName" placeholder="Ej. Temperatura Invernadero 01"></div>
+      <div class="row"><div class="field"><label>Canal</label><input id="channel" placeholder="Ej. 1"></div><div class="field"><label>Tipo</label><select id="sensorType"></select></div></div>
       <div class="row">
         <div class="field"><label>Unidad</label><input id="sensorUnit" value="ppm"></div>
         <div class="field"><label>Valor inicial</label><input id="sensorValue" type="number" value="0" step="0.1"></div>
@@ -68,6 +74,9 @@ let timer=null;
 let cursor=0;
 let ws=null;
 let types=[];
+let accessToken=null;
+let devices=[];
+const deviceKeys=new Map();
 
   const SENSOR_CATALOG = [
     // Ambiente
@@ -120,14 +129,26 @@ function render(){
     <div class="card-head"><div><div class="name">${esc(s.nombre)}</div><div class="type">${esc(s.tipo)} · ${esc(s.unidad)}</div></div><span class="pill ${stateClass(s.estado)}">${esc(s.estado)}</span></div>
     <div class="value">${Number(s.valorActual??0).toFixed(1)} <span style="font-size:14px;font-weight:600;color:var(--muted)">${esc(s.unidad)}</span></div>
     <div class="meta">Última lectura: ${fmtDate(s.ultimaLectura)}</div>
-    <div class="meta">DB ID: ${s.id} · Device: ${esc(s.deviceId||"-")} · Canal: ${esc(s.canal||"-")}</div>
+    <div class="meta">DB ID: ${s.id} · Dispositivo: ${esc(s.deviceAlias || devices.find(d=>d.hardwareId===s.deviceId)?.alias || s.deviceId || "-")} · Canal: ${esc(s.canal||"-")}</div>
     <div class="actions"><button class="${s.simConnected?'danger':'primary'}" onclick="toggleSimulation(${s.id})">${s.simConnected?'Interrumpir comunicación':'Reconectar'}</button><button class="secondary" onclick="sendNow(${s.id})">Enviar ahora</button></div>
   </div>`).join(''):'<div class="card"><div class="hint">No hay sensores todavía.</div></div>';
 }
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));}
 async function request(path, options={}){
-  const r=await fetch(apiBase()+path,{headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
+  const {skipAuth=false,...fetchOptions}=options;
+  const headers={'Content-Type':'application/json',...(fetchOptions.headers||{})};
+  if(accessToken&&!skipAuth&&!headers.Authorization)headers.Authorization=`Bearer ${accessToken}`;
+  const r=await fetch(apiBase()+path,{...fetchOptions,headers});
   const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{data={raw:text}}
+  if(r.status===401&&accessToken&&!skipAuth){
+    accessToken=null;
+    stopSequence();
+    if(ws)ws.close();ws=null;
+    sensors=[];devices=[];deviceKeys.clear();
+    $('loginStatus').textContent='La sesión expiró. Inicia sesión de nuevo.';
+    $('wsDot').className='dot bad';$('wsText').textContent='WebSocket desconectado';
+    render();
+  }
   if(!r.ok)throw new Error(data.message||`HTTP ${r.status}`);return data;
 }
   async function loadTypes() {
@@ -150,7 +171,39 @@ async function request(path, options={}){
     updateUnit();
 }
 function updateUnit(){const o=$('sensorType').selectedOptions[0];if(o)$('sensorUnit').value=o.dataset.unit||'';}
+async function simulatorLogin(){
+  try{
+    const data=await request('/auth/login',{method:'POST',skipAuth:true,body:JSON.stringify({correo:$('simEmail').value,password:$('simPassword').value})});
+    accessToken=data.accessToken;
+    if(!accessToken)throw new Error('El backend no devolvió accessToken.');
+    $('loginStatus').textContent=`Sesión activa: ${data.nombre}`;
+    await loadDevices(); await loadSensors(); connectWs();
+    log('Sesión iniciada para '+data.correo);
+  }catch(e){$('loginStatus').textContent='No se pudo iniciar sesión: '+e.message;log('ERROR login: '+e.message);}
+}
+async function loadDevices(){
+  if(!accessToken)return;
+  try{
+    devices=await request('/dispositivos');
+    const select=$('deviceSelect');
+    const paired=devices.filter(d=>d.hardwareId);
+    select.innerHTML=paired.length?paired.map(d=>`<option value="${esc(d.hardwareId)}">${esc(d.alias)}</option>`).join(''):'<option value="">Vincula un dispositivo primero</option>';
+  }catch(e){log('ERROR cargando dispositivos: '+e.message);}
+}
+async function pairSimulatedDevice(){
+  if(!accessToken){alert('Inicia sesión primero.');return;}
+  try{
+    const code=await request('/dispositivos/codigo-vinculacion',{method:'POST'});
+    const hardwareId='SIM-'+crypto.randomUUID();
+    const linked=await request('/dispositivos/vincular',{method:'POST',skipAuth:true,body:JSON.stringify({hardwareId,pairingCode:code.pairingCode})});
+    deviceKeys.set(hardwareId,linked.deviceKey);
+    await loadDevices();
+    $('deviceSelect').value=hardwareId;
+    log(`Dispositivo emparejado automáticamente como ${linked.alias}; hardwareId generado por el simulador.`);
+  }catch(e){alert('No se pudo vincular el dispositivo simulado: '+e.message);log('ERROR vinculación: '+e.message);}
+}
 async function loadSensors(){
+  if(!accessToken){log('Inicia sesión para consultar los sensores de una cuenta.');return;}
   try{
     const data=await request('/sensores');
     const old=new Map(sensors.map(x=>[x.id,x]));
@@ -159,29 +212,37 @@ async function loadSensors(){
   }catch(e){log('ERROR cargando sensores: '+e.message)}
 }
 async function createSensor(){
-  const nombre=$('sensorName').value.trim();const tipo=$('sensorType').value;const unidad=$('sensorUnit').value.trim();const valor=Number($('sensorValue').value||0);const deviceId=$('deviceId').value.trim();const canal=$('channel').value.trim();
-  if(!nombre||!tipo||!unidad||!deviceId||!canal){alert('Completa nombre, tipo, unidad, deviceId y canal.');return;}
+  if(!accessToken){alert('Inicia sesión primero.');return;}
+  const nombre=$('sensorName').value.trim();const tipo=$('sensorType').value;const unidad=$('sensorUnit').value.trim();const valor=Number($('sensorValue').value||0);const deviceId=$('deviceSelect').value;const canal=$('channel').value.trim();
+  if(!nombre||!tipo||!unidad||!deviceId||!canal){alert('Completa nombre, dispositivo vinculado y canal.');return;}
   try{
     const s=await request('/sensores',{method:'POST',body:JSON.stringify({nombre,tipo,unidad,valorActual:valor,deviceId,canal})});
     s.simConnected=true;sensors.push(s);render();log(`Sensor creado: #${s.id} ${s.nombre} (${s.tipo})`);
     $('sensorName').value='';
-    if(!running) startSequence();
+    if(!running)startSequence();
   }catch(e){alert('No se pudo crear el sensor: '+e.message);log('ERROR creando sensor: '+e.message)}
 }
 async function sendReading(sensor){
   if(!sensor.simConnected)return;
+  if(!accessToken){log('TX cancelado: inicia sesión en el simulador.');return;}
   const valor=randomValue(sensor.tipo);
   try{
-    const payload={valor,fecha:localDateTime()}; 
-    if(sensor.deviceId&&sensor.canal){payload.deviceId=sensor.deviceId;payload.canal=sensor.canal;
-      payload.tipo=sensor.tipo;payload.unidad=sensor.unidad;}else{payload.sensorId=sensor.id;} 
-      const l=await request('/lecturas',{method:'POST',body:JSON.stringify(payload)});
-
+    const payload={valor,fecha:localDateTime()};
+    const deviceKey=deviceKeys.get(sensor.deviceId);
+    let options;
+    if(deviceKey&&sensor.deviceId&&sensor.canal){
+      payload.deviceId=sensor.deviceId;payload.canal=sensor.canal;payload.tipo=sensor.tipo;payload.unidad=sensor.unidad;
+      options={method:'POST',skipAuth:true,headers:{'X-Device-Key':deviceKey},body:JSON.stringify(payload)};
+    }else{
+      payload.sensorId=sensor.id;
+      options={method:'POST',body:JSON.stringify(payload)};
+    }
+    const l=await request('/lecturas',options);
     sensor.valorActual=valor;sensor.ultimaLectura=l.fecha||localDateTime();sensor.estado='ACTIVO';
-    log(`TX sensor #${sensor.id} ${sensor.tipo}: ${valor} ${sensor.unidad}`);
-    render();
+    log(`TX ${sensor.deviceAlias||sensor.deviceId||'sensor'} canal ${sensor.canal||'-'} · ${sensor.tipo}: ${valor} ${sensor.unidad}`);render();
   }catch(e){log(`ERROR TX #${sensor.id}: ${e.message}`);}
 }
+
 function localDateTime(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;}
 async function sendNow(id){const s=sensors.find(x=>x.id===id);if(s){s.simConnected=true;await sendReading(s);}}
 function next(){
@@ -193,20 +254,24 @@ function startSequence(){if(running)return;running=true;cursor=cursor%sensors.le
 function stopSequence(){running=false;clearInterval(timer);timer=null;render();log('Secuencia detenida');}
 window.toggleSimulation=function(id){const s=sensors.find(x=>x.id===id);if(!s)return;s.simConnected=!s.simConnected;log(`${s.simConnected?'RECONEXIÓN':'INTERRUPCIÓN'} del sensor #${id} ${s.nombre}`);render();};
 function connectWs(){
+  if(!accessToken)return;
   try{
-    ws=new WebSocket($('wsUrl').value);
+    const base=$('wsUrl').value;
+    ws=new WebSocket(base+(base.includes('?')?'&':'?')+'token='+encodeURIComponent(accessToken));
     ws.onopen=()=>{$('wsDot').className='dot ok';$('wsText').textContent='WebSocket conectado';log('WebSocket conectado al backend');};
-    ws.onclose=()=>{$('wsDot').className='dot bad';$('wsText').textContent='WebSocket desconectado';setTimeout(connectWs,2500);};
+    ws.onclose=()=>{$('wsDot').className='dot bad';$('wsText').textContent='WebSocket desconectado';if(accessToken)setTimeout(connectWs,2500);};
     ws.onerror=()=>{$('wsDot').className='dot bad';$('wsText').textContent='Error WebSocket';};
     ws.onmessage=e=>{try{const m=JSON.parse(e.data);const s=sensors.find(x=>x.id==m.sensorId);if(s){if(m.valor!==undefined)s.valorActual=Number(m.valor);if(m.fecha)s.ultimaLectura=m.fecha;if(m.estado)s.estado=m.estado;render();}}catch{}};
   }catch{setTimeout(connectWs,2500);}
 }
 $('sensorType').addEventListener('change',updateUnit);
+$('loginBtn').addEventListener('click',simulatorLogin);
+$('pairDeviceBtn').addEventListener('click',pairSimulatedDevice);
 $('createBtn').addEventListener('click',createSensor);
 $('startBtn').addEventListener('click',startSequence);
 $('stopBtn').addEventListener('click',stopSequence);
 $('refreshBtn').addEventListener('click',loadSensors);
-(async()=>{await loadTypes();await loadSensors();connectWs();})();
+(async()=>{await loadTypes();log('Inicia sesión y luego vincula un dispositivo para comenzar.');})();
 </script>
 </body>
 </html>
